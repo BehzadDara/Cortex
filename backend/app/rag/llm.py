@@ -37,6 +37,7 @@ class OllamaLLMProvider:
             "tools": tools,
             "stream": False,
             "think": True,
+            "options": {"num_ctx": settings.llm_num_ctx},
         }
         response = httpx.post(
             f"{settings.ollama_url}/api/chat", json=request, timeout=300
@@ -62,6 +63,7 @@ class OllamaLLMProvider:
             "prompt": prompt,
             "stream": False,
             "think": True,
+            "options": {"num_ctx": settings.llm_num_ctx},
         }
         response = httpx.post(
             f"{settings.ollama_url}/api/generate", json=request, timeout=300
@@ -75,6 +77,7 @@ class OllamaLLMProvider:
             "prompt": prompt,
             "stream": True,
             "think": True,
+            "options": {"num_ctx": settings.llm_num_ctx},
         }
         with httpx.stream(
             "POST", f"{settings.ollama_url}/api/generate", json=request, timeout=300

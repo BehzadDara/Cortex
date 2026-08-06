@@ -15,7 +15,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **9. Re-ranking** — Cross-encoder narrows top-30 to top-5. Measured: hit@1 86% → 100%, MRR 0.925 → 1.000.
 - [x] **10. Conversation memory** — Chat history, summarization, user preferences.
 - [x] **11. Tool calling** — Document search, calculator, current time as callable tools via `/chat`. Qwen3 4B handles single-tool selection reliably.
-- [ ] **12. Agents** — Planner → retriever → reasoner workflow.
+- [x] **12. Agents** — Planner → retriever → reasoner workflow via `/agent`, returning the full trace.
 - [ ] **13. OCR & multimodal** — Scanned PDFs, images, diagrams.
 - [ ] **14. Dashboard** — Indexed documents, latency, token usage — built on the logs kept since step 3.
 - [ ] **15. Production hardening** — Auth, users, API keys, rate limiting, background jobs.

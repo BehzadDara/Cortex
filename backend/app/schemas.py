@@ -44,6 +44,17 @@ class AskRequest(BaseModel):
     conversation_id: int | None = None
 
 
+class AgentStepResponse(BaseModel):
+    query: str
+    findings: list[str]
+
+
+class AgentResponse(BaseModel):
+    plan: list[str]
+    steps: list[AgentStepResponse]
+    answer: str
+
+
 class ChatRequest(BaseModel):
     question: str
 

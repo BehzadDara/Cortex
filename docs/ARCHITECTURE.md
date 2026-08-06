@@ -41,6 +41,8 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **Tool calling** — `/chat` is the agentic endpoint: the model receives tool definitions (`search_documents`, `calculator`, `current_time`) and decides itself which to call. A bounded loop executes tool calls, feeds results back as `tool` messages, and stops when the model answers in plain text. `/ask` remains the fixed RAG pipeline.
 
+**Agent** — `/agent` runs a planner → retriever → reasoner pipeline for questions that need decomposition: the LLM breaks the question into search queries, each query runs through the retrieval funnel (chunks already gathered are deduplicated), and a final LLM call synthesizes the answer from the labeled evidence. The response includes the full trace: plan, per-step findings, and answer. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
+
 **Storage** — PostgreSQL is the source of truth: documents, chunks, logs, and later collections and users. Schema is managed with Alembic. Qdrant stores one vector per chunk; keeping the two in sync is the ingestion service's responsibility.
 
 ## Abstractions
