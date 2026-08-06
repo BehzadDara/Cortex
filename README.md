@@ -12,13 +12,9 @@ It is also a learning project: it starts as the simplest possible RAG applicatio
 - **Database** — PostgreSQL + pgvector
 - **LLM** — Ollama (Qwen3 4B)
 - **Embeddings** — nomic-embed-text
-- **Frontend** — React + Vite (later phases)
+- **Frontend** — React + Vite
 
 ## Documentation
 
 - [Plan](docs/PLAN.md) — the roadmap, step by step
 - [Architecture](docs/ARCHITECTURE.md) — system design and how to run it
-
-## Status
-
-🚧 Early days — currently at step 2 of the [plan](docs/PLAN.md).

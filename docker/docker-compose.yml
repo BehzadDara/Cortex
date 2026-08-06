@@ -1,3 +1,5 @@
+name: cortex
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
