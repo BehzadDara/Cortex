@@ -21,6 +21,7 @@ def ingest_document(
     text: str,
     embeddings: EmbeddingProvider,
     vector_store: VectorStore,
+    collection_id: int | None = None,
 ) -> Document:
     content_hash = hashlib.sha256(text.encode()).hexdigest()
     duplicate = session.scalar(
@@ -29,7 +30,9 @@ def ingest_document(
     if duplicate:
         raise DuplicateDocumentError(duplicate.filename)
 
-    document = Document(filename=filename, content_hash=content_hash)
+    document = Document(
+        filename=filename, content_hash=content_hash, collection_id=collection_id
+    )
     document.chunks = [
         Chunk(content=piece.content, position=piece.position)
         for piece in split_text(text, settings.chunk_size, settings.chunk_overlap)
@@ -37,8 +40,16 @@ def ingest_document(
     session.add(document)
     session.flush()
 
+    payload = {"document_id": document.id}
+    if collection_id is not None:
+        payload["collection_id"] = collection_id
+
     vectors = embeddings.embed_documents([chunk.content for chunk in document.chunks])
-    vector_store.add([chunk.id for chunk in document.chunks], vectors)
+    vector_store.add(
+        [chunk.id for chunk in document.chunks],
+        vectors,
+        [payload] * len(document.chunks),
+    )
 
     session.commit()
     return document

@@ -8,7 +8,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **2. Minimal RAG** — Ingest `.txt` / `.md`: chunk → embed → store → retrieve top-k → answer with SSE streaming. Chunk metadata (source, position) stored from day one for future citations.
 - [x] **3. Evaluation** — Golden set of 20–30 questions with expected answers and source chunks. Script reporting hit-rate@k. Every prompt/response/latency logged to a table.
 - [x] **4. Documents** — PDF and DOCX parsing, file management, duplicate detection.
-- [ ] **5. Collections** — Group documents into collections, filter retrieval by collection.
+- [x] **5. Collections** — Group documents into collections, filter retrieval by collection.
 - [ ] **6. Website indexing** — Crawl a URL, clean HTML, chunk, index.
 - [ ] **7. Git repository indexing** — Clone a repo, code-aware chunking, index source and Markdown.
 - [ ] **8. Hybrid search** — Postgres full-text (`tsvector`) + Qdrant vector search, merged with reciprocal rank fusion. Measured.

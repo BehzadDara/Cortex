@@ -59,7 +59,12 @@ def ask(
     llm: LLMProvider = Depends(get_llm_provider),
 ) -> StreamingResponse:
     chunks = retrieve_chunks(
-        session, request.question, settings.top_k, embeddings, vector_store
+        session,
+        request.question,
+        settings.top_k,
+        embeddings,
+        vector_store,
+        request.collection_id,
     )
     prompt = build_answer_prompt([chunk.content for chunk in chunks], request.question)
     return StreamingResponse(

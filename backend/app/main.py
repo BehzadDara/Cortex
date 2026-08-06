@@ -2,11 +2,12 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from app.api import ask, documents
+from app.api import ask, collections, documents
 from app.config import settings
 from app.database import engine
 
 app = FastAPI(title="Cortex")
+app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(ask.router)
 
