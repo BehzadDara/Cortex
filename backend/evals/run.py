@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
-from app.dependencies import get_embedding_provider, get_llm_provider, get_vector_store
+from app.dependencies import (
+    get_embedding_provider,
+    get_llm_provider,
+    get_reranker,
+    get_vector_store,
+)
 from app.models import Chunk
 from app.rag.prompts import build_answer_prompt
 from app.rag.retrieval import retrieve_chunks
@@ -38,8 +43,13 @@ def evaluate(session: Session, items: list[dict], with_generation: bool) -> None
     embeddings = get_embedding_provider()
     vector_store = get_vector_store()
     llm = get_llm_provider()
+    reranker = get_reranker() if settings.rerank else None
+    if reranker:
+        reranker.rerank("warm up", ["warm up"])
 
     hits = 0
+    first_hits = 0
+    reciprocal_sum = 0.0
     correct = 0
     retrieval_seconds: list[float] = []
     generation_seconds: list[float] = []
@@ -47,13 +57,20 @@ def evaluate(session: Session, items: list[dict], with_generation: bool) -> None
     for item in items:
         started = time.perf_counter()
         chunks = retrieve_chunks(
-            session, item["question"], settings.top_k, embeddings, vector_store
+            session,
+            item["question"],
+            settings.top_k,
+            embeddings,
+            vector_store,
+            reranker=reranker,
         )
         retrieval_seconds.append(time.perf_counter() - started)
 
         rank = retrieval_rank(chunks, item)
         if rank:
             hits += 1
+            first_hits += rank == 1
+            reciprocal_sum += 1 / rank
         status = f"hit@{rank}" if rank else "MISS"
 
         if with_generation:
@@ -74,6 +91,8 @@ def evaluate(session: Session, items: list[dict], with_generation: bool) -> None
     total = len(items)
     print()
     print(f"hit rate@{settings.top_k}: {hits}/{total} = {hits / total:.0%}")
+    print(f"hit@1: {first_hits}/{total} = {first_hits / total:.0%}")
+    print(f"MRR: {reciprocal_sum / total:.3f}")
     print(f"avg retrieval: {statistics.mean(retrieval_seconds) * 1000:.0f} ms")
     if with_generation:
         print(f"answer accuracy: {correct}/{total} = {correct / total:.0%}")

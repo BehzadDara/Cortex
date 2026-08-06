@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.rag.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
 from app.rag.llm import LLMProvider, OllamaLLMProvider
+from app.rag.reranking import CrossEncoderReranker, Reranker
 from app.rag.vector_store import QdrantVectorStore, VectorStore
 
 
@@ -27,3 +28,8 @@ def get_llm_provider() -> LLMProvider:
 @lru_cache
 def get_vector_store() -> VectorStore:
     return QdrantVectorStore()
+
+
+@lru_cache
+def get_reranker() -> Reranker:
+    return CrossEncoderReranker()

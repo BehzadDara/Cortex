@@ -2,6 +2,17 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-06 — Cross-encoder re-ranking measured
+
+Funnel: hybrid retrieval fetches top-30 candidates, `cross-encoder/ms-marco-MiniLM-L-6-v2` re-scores them, top-5 survive. Measured on 29 golden questions:
+
+| Mode | hit@1 | MRR | avg retrieval |
+| --- | --- | --- | --- |
+| hybrid only | 25/29 = 86% | 0.925 | 61 ms |
+| hybrid + rerank | 29/29 = 100% | 1.000 | 227 ms |
+
+hit rate@5 was already 100%, so the win shows in ranking quality: every answer now sits at position 1, meaning the LLM sees the best evidence first. Price: ~170 ms of local model inference per query. `RERANK=false` disables it. The cross-encoder runs inside the backend process via sentence-transformers — the first dependency that executes a neural network in-process instead of behind Ollama's API.
+
 ## 2026-08-06 — Hybrid search measured
 
 Corpus at 29 golden questions over ~100 chunks (examples + crawled pages + the Cortex repo itself):

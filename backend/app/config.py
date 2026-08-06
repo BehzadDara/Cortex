@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     code_chunk_overlap_lines: int = 10
     top_k: int = 5
     hybrid_search: bool = True
+    rerank: bool = True
+    rerank_candidates: int = 30
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
 settings = Settings()

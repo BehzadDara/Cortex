@@ -11,6 +11,7 @@ from app.database import SessionLocal
 from app.dependencies import (
     get_embedding_provider,
     get_llm_provider,
+    get_reranker,
     get_session,
     get_vector_store,
 )
@@ -18,6 +19,7 @@ from app.models import PromptLog
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_answer_prompt
+from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
 from app.rag.vector_store import VectorStore
 from app.schemas import AskRequest
@@ -57,6 +59,7 @@ def ask(
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
     llm: LLMProvider = Depends(get_llm_provider),
+    reranker: Reranker = Depends(get_reranker),
 ) -> StreamingResponse:
     chunks = retrieve_chunks(
         session,
@@ -64,7 +67,8 @@ def ask(
         settings.top_k,
         embeddings,
         vector_store,
-        request.collection_id,
+        collection_id=request.collection_id,
+        reranker=reranker,
     )
     prompt = build_answer_prompt([chunk.content for chunk in chunks], request.question)
     return StreamingResponse(

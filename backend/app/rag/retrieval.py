@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Chunk, Document
 from app.rag.embeddings import EmbeddingProvider
+from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 
 RRF_K = 60
@@ -37,19 +38,31 @@ def retrieve_chunks(
     embeddings: EmbeddingProvider,
     vector_store: VectorStore,
     collection_id: int | None = None,
+    reranker: Reranker | None = None,
 ) -> list[Chunk]:
+    reranking = reranker is not None and settings.rerank
+    candidates = settings.rerank_candidates if reranking else limit
+
     query_vector = embeddings.embed_query(question)
     filters = {"collection_id": collection_id} if collection_id else None
     vector_ids = [
-        result.chunk_id for result in vector_store.search(query_vector, limit, filters)
+        result.chunk_id
+        for result in vector_store.search(query_vector, candidates, filters)
     ]
 
     if settings.hybrid_search:
-        keyword_ids = keyword_search(session, question, limit, collection_id)
-        chunk_ids = reciprocal_rank_fusion([vector_ids, keyword_ids])[:limit]
+        keyword_ids = keyword_search(session, question, candidates, collection_id)
+        chunk_ids = reciprocal_rank_fusion([vector_ids, keyword_ids])[:candidates]
     else:
         chunk_ids = vector_ids
 
     chunks = session.scalars(select(Chunk).where(Chunk.id.in_(chunk_ids))).all()
     rank = {chunk_id: index for index, chunk_id in enumerate(chunk_ids)}
-    return sorted(chunks, key=lambda chunk: rank[chunk.id])
+    ordered = sorted(chunks, key=lambda chunk: rank[chunk.id])
+
+    if reranking:
+        scores = reranker.rerank(question, [chunk.content for chunk in ordered])
+        scored = sorted(zip(scores, ordered), key=lambda pair: pair[0], reverse=True)
+        ordered = [chunk for _, chunk in scored]
+
+    return ordered[:limit]

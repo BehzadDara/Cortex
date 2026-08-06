@@ -33,7 +33,7 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **Ingestion** — Takes a file (or a crawled web page), parses it to text, splits it into chunks, stores chunk + metadata (source, position) in Postgres, embeds each chunk, and stores the vector in Qdrant with the chunk id as payload. Metadata is stored from day one so citations can be added later without re-ingesting. The crawler does a same-domain breadth-first crawl with a page cap, strips HTML boilerplate, and feeds each page through the same pipeline; unchanged pages are skipped by the content hash.
 
-**Retrieval** — Hybrid search: the query is embedded and sent to Qdrant (cosine similarity) while Postgres full-text search (`tsvector`, GIN-indexed) runs in parallel; the two rankings are merged with reciprocal rank fusion and the top-k chunks are loaded from Postgres. `HYBRID_SEARCH=false` falls back to vector-only. Cross-encoder re-ranking comes in a later phase without changing this interface.
+**Retrieval** — A three-stage funnel. Hybrid search: the query is embedded and sent to Qdrant (cosine similarity) while Postgres full-text search (`tsvector`, GIN-indexed) runs alongside; the two rankings are merged with reciprocal rank fusion into top-30 candidates. A cross-encoder (`ms-marco-MiniLM-L-6-v2`) then re-scores each candidate against the question and the top-5 survive. `HYBRID_SEARCH=false` and `RERANK=false` switch the stages off individually.
 
 **LLM Service** — Builds the prompt from retrieved context and streams the answer.
 

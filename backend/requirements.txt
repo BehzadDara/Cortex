@@ -11,3 +11,4 @@ pypdf
 python-docx
 beautifulsoup4
 GitPython
+sentence-transformers
