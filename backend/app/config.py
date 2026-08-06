@@ -8,5 +8,14 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     ollama_url: str = "http://localhost:11434"
 
+    llm_model: str = "qwen3:4b"
+    embedding_model: str = "nomic-embed-text"
+    embedding_dimensions: int = 768
+    qdrant_collection: str = "chunks"
+
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+    top_k: int = 5
+
 
 settings = Settings()

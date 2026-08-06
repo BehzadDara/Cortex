@@ -2,10 +2,11 @@ from logging.config import fileConfig
 
 from alembic import context
 
-from app.database import Base, engine
+from app import models
+from app.database import engine
 
 fileConfig(context.config.config_file_name)
-target_metadata = Base.metadata
+target_metadata = models.Base.metadata
 
 
 def run_migrations() -> None:

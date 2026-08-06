@@ -5,7 +5,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 ## Steps
 
 - [x] **1. Setup** — Docker Compose (PostgreSQL + Qdrant), FastAPI skeleton, Alembic migrations, Ollama with Qwen3 4B and nomic-embed-text.
-- [ ] **2. Minimal RAG** — Ingest `.txt` / `.md`: chunk → embed → store → retrieve top-k → answer with SSE streaming. Chunk metadata (source, position) stored from day one for future citations.
+- [x] **2. Minimal RAG** — Ingest `.txt` / `.md`: chunk → embed → store → retrieve top-k → answer with SSE streaming. Chunk metadata (source, position) stored from day one for future citations.
 - [ ] **3. Evaluation** — Golden set of 20–30 questions with expected answers and source chunks. Script reporting hit-rate@k. Every prompt/response/latency logged to a table.
 - [ ] **4. Documents** — PDF and DOCX parsing, file management, duplicate detection.
 - [ ] **5. Collections** — Group documents into collections, filter retrieval by collection.

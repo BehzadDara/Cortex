@@ -5,3 +5,5 @@ psycopg[binary]
 pydantic-settings
 alembic
 httpx
+qdrant-client
+python-multipart
