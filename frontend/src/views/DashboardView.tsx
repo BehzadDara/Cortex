@@ -32,7 +32,8 @@ export default function DashboardView() {
     : [];
 
   return (
-    <div>
+    <div className="page">
+      <div className="page-inner">
       <div className="row" style={{ marginBottom: 14, justifyContent: "space-between" }}>
         <h2>Dashboard</h2>
         <button className="ghost" onClick={refresh}>
@@ -81,6 +82,7 @@ export default function DashboardView() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

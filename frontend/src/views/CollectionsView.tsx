@@ -39,20 +39,25 @@ export default function CollectionsView() {
   }
 
   return (
-    <div>
+    <div className="page">
+      <div className="page-inner">
       <div className="panel">
         <h2>New collection</h2>
-        <div className="row">
-          <input
-            className="grow"
-            placeholder="Collection name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && create()}
-          />
-          <button className="primary" onClick={create}>
-            Create
-          </button>
+        <div className="field">
+          <label htmlFor="collection-name">Name</label>
+          <div className="row">
+            <input
+              id="collection-name"
+              className="grow"
+              placeholder="e.g. Personal notes"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && create()}
+            />
+            <button className="primary" onClick={create}>
+              Create
+            </button>
+          </div>
         </div>
         {error && <p className="error">{error}</p>}
       </div>
@@ -85,6 +90,7 @@ export default function CollectionsView() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );
