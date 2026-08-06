@@ -16,16 +16,22 @@ from app.rag.retrieval import retrieve_chunks
 GOLDEN_PATH = Path(__file__).parent / "golden.json"
 
 
+def normalize(text: str) -> str:
+    return " ".join(text.split()).lower()
+
+
 def retrieval_rank(chunks: list[Chunk], item: dict) -> int | None:
     for rank, chunk in enumerate(chunks, start=1):
         same_source = chunk.document.filename == item["source_document"]
-        if same_source and item["source_phrase"].lower() in chunk.content.lower():
+        if same_source and normalize(item["source_phrase"]) in normalize(chunk.content):
             return rank
     return None
 
 
 def answer_is_correct(answer: str, item: dict) -> bool:
-    return all(phrase.lower() in answer.lower() for phrase in item["expected_phrases"])
+    return all(
+        normalize(phrase) in normalize(answer) for phrase in item["expected_phrases"]
+    )
 
 
 def evaluate(session: Session, items: list[dict], with_generation: bool) -> None:

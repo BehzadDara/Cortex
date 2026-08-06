@@ -2,6 +2,17 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-06 — Hybrid search measured
+
+Corpus at 29 golden questions over ~100 chunks (examples + crawled pages + the Cortex repo itself):
+
+| Mode | hit rate@5 | avg retrieval |
+| --- | --- | --- |
+| vector only | 28/29 = 97% | 43 ms |
+| hybrid (RRF) | 29/29 = 100% | 50 ms |
+
+The rescued question was "What is the Great Red Spot?" — an exact phrase that full-text search finds at rank 1 while vector search had let it slip out of top-5 as the corpus grew. Two side lessons: eval scoring must normalize whitespace (pypdf wraps lines mid-phrase, which made a rank-1 hit look like a MISS), and `plainto_tsquery` ANDs all terms, so one absent word empties the keyword result — the vector leg covers those cases, which is exactly why hybrid works.
+
 ## 2026-08-06 — Schema migrations are not data migrations
 
 Adding `content_hash` for duplicate detection looked done once the column migrated — but documents ingested before the migration had NULL hashes, so re-uploading one of them slipped past the duplicate check. Lesson: a new constraint only protects rows written after it; existing rows need a backfill (or, in dev, deletion and re-ingestion). The column stays nullable because the original text cannot be reconstructed from overlapping chunks.

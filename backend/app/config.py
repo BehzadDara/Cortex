@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     code_chunk_lines: int = 60
     code_chunk_overlap_lines: int = 10
     top_k: int = 5
+    hybrid_search: bool = True
 
 
 settings = Settings()
