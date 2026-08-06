@@ -504,6 +504,20 @@ tbody tr:hover {
   margin-bottom: 6px;
 }
 
+.message-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.message-group.user {
+  align-items: flex-end;
+}
+
+.message-group.assistant {
+  align-items: flex-start;
+}
+
 .message {
   line-height: 1.6;
   white-space: pre-wrap;
@@ -511,7 +525,6 @@ tbody tr:hover {
 }
 
 .message.user {
-  align-self: flex-end;
   max-width: 70%;
   background: var(--muted);
   border-radius: 10px;
@@ -519,7 +532,6 @@ tbody tr:hover {
 }
 
 .message.assistant {
-  align-self: flex-start;
   max-width: 90%;
   background: var(--background);
   border: 1px solid var(--border);
@@ -588,33 +600,30 @@ tbody tr:hover {
   max-width: 240px;
 }
 
-.message-attachment {
-  margin-bottom: 8px;
-}
-
 .message-attachment img {
   display: block;
-  max-width: 240px;
-  max-height: 180px;
-  border-radius: var(--radius);
+  max-width: 120px;
+  max-height: 90px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
 
 .message-attachment figcaption {
-  margin-top: 4px;
-  font-size: 11.5px;
+  margin-top: 3px;
+  font-size: 10.5px;
   color: var(--muted-foreground);
+  text-align: right;
 }
 
 .message-attachment.file {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 5px 10px;
-  font-size: 12.5px;
+  padding: 4px 8px;
+  font-size: 11.5px;
   color: var(--muted-foreground);
 }
 

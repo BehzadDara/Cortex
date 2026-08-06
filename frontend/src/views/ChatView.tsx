@@ -385,10 +385,11 @@ export default function ChatView() {
               </div>
             )}
             {messages.map((message, index) => (
-              <div key={index} className={`message ${message.role}`}>
+              <div key={index} className={`message-group ${message.role}`}>
                 {message.attachment && (
                   <AttachmentCard attachment={message.attachment} />
                 )}
+                <div className={`message ${message.role}`}>
                 {message.pending ? (
                   <span className="thinking">
                     {message.content}
@@ -424,6 +425,7 @@ export default function ChatView() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
             ))}
             <div ref={bottom} />
