@@ -188,7 +188,7 @@ export default function ChatView() {
       setConversations((current) => [
         {
           id: created,
-          title: firstQuestion.slice(0, 80),
+          title: firstQuestion.slice(0, 20),
           message_count: 0,
           created_at: new Date().toISOString(),
         },
@@ -198,6 +198,14 @@ export default function ChatView() {
     }
     refreshConversations();
     setTimeout(refreshConversations, 4000);
+  }
+
+  function applyTitle(target: number, title: string) {
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === target ? { ...conversation, title } : conversation,
+      ),
+    );
   }
 
   function clearAttachment() {
@@ -254,6 +262,7 @@ export default function ChatView() {
           existingId,
           (created) => adoptConversation(created, trimmed),
           appendAssistantToken,
+          applyTitle,
         );
         refreshConversations();
       } else if (mode === "chat") {

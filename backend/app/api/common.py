@@ -4,12 +4,12 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import Conversation
-from app.rag.conversation import save_title
+from app.rag.conversation import placeholder_title, save_title
 from app.rag.llm import LLMProvider
 
 
 def find_or_create_conversation(
-    session: Session, conversation_id: int | None
+    session: Session, conversation_id: int | None, question: str
 ) -> tuple[Conversation, bool]:
     if conversation_id is not None:
         conversation = session.get(Conversation, conversation_id)
@@ -17,15 +17,18 @@ def find_or_create_conversation(
             raise HTTPException(status_code=404, detail="Conversation not found")
         return conversation, False
 
-    conversation = Conversation()
+    conversation = Conversation(title=placeholder_title(question))
     session.add(conversation)
     session.commit()
     return conversation, True
 
 
 def start_title_generation(
-    llm: LLMProvider, conversation_id: int, question: str
+    llm: LLMProvider, conversation_id: int, question: str, holder: dict
 ) -> None:
-    threading.Thread(
-        target=save_title, args=(llm, conversation_id, question), daemon=True
-    ).start()
+    def work() -> None:
+        title = save_title(llm, conversation_id, question)
+        if title:
+            holder["title"] = title
+
+    threading.Thread(target=work, daemon=True).start()

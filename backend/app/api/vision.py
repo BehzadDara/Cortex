@@ -26,9 +26,11 @@ def ask_image(
     llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
 ) -> ImageAskResponse:
-    conversation, is_new = find_or_create_conversation(session, conversation_id)
+    conversation, is_new = find_or_create_conversation(
+        session, conversation_id, question
+    )
     if is_new:
-        start_title_generation(fast_llm, conversation.id, question)
+        start_title_generation(fast_llm, conversation.id, question, {})
 
     answer = vision.describe(file.file.read(), question)
     save_exchange(

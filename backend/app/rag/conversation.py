@@ -23,18 +23,26 @@ def format_history(conversation: Conversation, messages: list[Message]) -> str:
     return "\n".join(parts)
 
 
-def save_title(llm: LLMProvider, conversation_id: int, question: str) -> None:
+def placeholder_title(question: str) -> str:
+    return question[:20]
+
+
+def save_title(llm: LLMProvider, conversation_id: int, question: str) -> str | None:
     try:
         title = llm.complete(build_title_prompt(question)).strip().strip('"')[:80]
     except Exception:
-        return
+        return None
     if not title:
-        return
+        return None
     with SessionLocal() as session:
         conversation = session.get(Conversation, conversation_id)
-        if conversation is not None and conversation.title is None:
-            conversation.title = title
-            session.commit()
+        if conversation is None:
+            return None
+        if conversation.title != placeholder_title(question):
+            return None
+        conversation.title = title
+        session.commit()
+    return title
 
 
 def conversation_messages(conversation: Conversation) -> list[dict]:

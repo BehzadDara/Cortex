@@ -141,6 +141,7 @@ export async function streamAsk(
   conversationId: number | null,
   onConversation: (id: number) => void,
   onToken: (token: string) => void,
+  onTitle: (id: number, title: string) => void,
 ): Promise<void> {
   const response = await fetch(
     `${BASE}/ask`,
@@ -167,6 +168,7 @@ export async function streamAsk(
       const event = JSON.parse(raw.slice(6));
       if (event.type === "conversation") onConversation(event.id);
       else if (event.type === "token") onToken(event.content);
+      else if (event.type === "title") onTitle(event.id, event.title);
       else if (event.type === "done") return;
     }
   }

@@ -37,10 +37,10 @@ def agent(
     reranker: Reranker = Depends(get_reranker),
 ) -> AgentResponse:
     conversation, is_new = find_or_create_conversation(
-        session, request.conversation_id
+        session, request.conversation_id, request.question
     )
     if is_new:
-        start_title_generation(fast_llm, conversation.id, request.question)
+        start_title_generation(fast_llm, conversation.id, request.question, {})
 
     history = format_history(conversation, recent_messages(conversation))
     question = request.question

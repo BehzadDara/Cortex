@@ -54,8 +54,19 @@ def save_prompt_log(
         session.commit()
 
 
+def title_event(conversation_id: int, title_holder: dict | None) -> str | None:
+    if title_holder is None or "title" not in title_holder:
+        return None
+    title = title_holder.pop("title")
+    return f"data: {json.dumps({'type': 'title', 'id': conversation_id, 'title': title})}\n\n"
+
+
 def sse_events(
-    llm: LLMProvider, prompt: str, question: str, conversation_id: int
+    llm: LLMProvider,
+    prompt: str,
+    question: str,
+    conversation_id: int,
+    title_holder: dict | None = None,
 ) -> Iterator[str]:
     yield f"data: {json.dumps({'type': 'conversation', 'id': conversation_id})}\n\n"
 
@@ -65,6 +76,12 @@ def sse_events(
     for token in llm.stream(prompt, usage):
         tokens.append(token)
         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+        event = title_event(conversation_id, title_holder)
+        if event:
+            yield event
+    event = title_event(conversation_id, title_holder)
+    if event:
+        yield event
     yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     answer = "".join(tokens)
@@ -83,10 +100,11 @@ def ask(
     reranker: Reranker = Depends(get_reranker),
 ) -> StreamingResponse:
     conversation, is_new = find_or_create_conversation(
-        session, request.conversation_id
+        session, request.conversation_id, request.question
     )
+    title_holder: dict = {}
     if is_new:
-        start_title_generation(fast_llm, conversation.id, request.question)
+        start_title_generation(fast_llm, conversation.id, request.question, title_holder)
 
     history = format_history(conversation, recent_messages(conversation))
 
@@ -107,6 +125,12 @@ def ask(
         [chunk.content for chunk in chunks], request.question, history or None
     )
     return StreamingResponse(
-        sse_events(llm, prompt, request.question, conversation.id),
+        sse_events(
+            llm,
+            prompt,
+            request.question,
+            conversation.id,
+            title_holder if is_new else None,
+        ),
         media_type="text/event-stream",
     )

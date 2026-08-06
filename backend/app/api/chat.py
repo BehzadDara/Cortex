@@ -81,10 +81,10 @@ def chat(
     reranker: Reranker = Depends(get_reranker),
 ) -> ChatResponse:
     conversation, is_new = find_or_create_conversation(
-        session, request.conversation_id
+        session, request.conversation_id, request.question
     )
     if is_new:
-        start_title_generation(fast_llm, conversation.id, request.question)
+        start_title_generation(fast_llm, conversation.id, request.question, {})
 
     history = conversation_messages(conversation)
     tools = build_tools(session, embeddings, vector_store, reranker)
