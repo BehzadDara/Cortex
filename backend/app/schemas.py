@@ -60,6 +60,7 @@ class AskRequest(BaseModel):
 
 
 class ImageAskResponse(BaseModel):
+    conversation_id: int
     answer: str
 
 
@@ -91,6 +92,7 @@ class AgentStepResponse(BaseModel):
 
 
 class AgentResponse(BaseModel):
+    conversation_id: int
     plan: list[str]
     steps: list[AgentStepResponse]
     answer: str
@@ -98,9 +100,11 @@ class AgentResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
+    conversation_id: int | None = None
 
 
 class ChatResponse(BaseModel):
+    conversation_id: int
     answer: str
     tools_used: list[str]
 

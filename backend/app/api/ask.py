@@ -1,12 +1,12 @@
 import json
-import threading
 import time
 from collections.abc import Iterator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.common import find_or_create_conversation, start_title_generation
 from app.config import settings
 from app.database import SessionLocal
 from app.dependencies import (
@@ -17,13 +17,12 @@ from app.dependencies import (
     get_session,
     get_vector_store,
 )
-from app.models import Conversation, Message, PromptLog
+from app.models import PromptLog
 from app.rag.conversation import (
     format_history,
-    maybe_summarize,
     recent_messages,
     rewrite_question,
-    save_title,
+    save_exchange,
 )
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
@@ -34,21 +33,6 @@ from app.rag.vector_store import VectorStore
 from app.schemas import AskRequest
 
 router = APIRouter(tags=["ask"])
-
-
-def find_or_create_conversation(
-    session: Session, conversation_id: int | None
-) -> Conversation:
-    if conversation_id is not None:
-        conversation = session.get(Conversation, conversation_id)
-        if conversation is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        return conversation
-
-    conversation = Conversation()
-    session.add(conversation)
-    session.commit()
-    return conversation
 
 
 def save_prompt_log(
@@ -68,25 +52,6 @@ def save_prompt_log(
             )
         )
         session.commit()
-
-
-def save_exchange(
-    conversation_id: int, question: str, answer: str, llm: LLMProvider
-) -> None:
-    with SessionLocal() as session:
-        conversation = session.get(Conversation, conversation_id)
-        session.add_all(
-            [
-                Message(
-                    conversation_id=conversation_id, role="user", content=question
-                ),
-                Message(
-                    conversation_id=conversation_id, role="assistant", content=answer
-                ),
-            ]
-        )
-        session.commit()
-        maybe_summarize(session, llm, conversation)
 
 
 def sse_events(
@@ -117,14 +82,11 @@ def ask(
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
 ) -> StreamingResponse:
-    is_new = request.conversation_id is None
-    conversation = find_or_create_conversation(session, request.conversation_id)
+    conversation, is_new = find_or_create_conversation(
+        session, request.conversation_id
+    )
     if is_new:
-        threading.Thread(
-            target=save_title,
-            args=(fast_llm, conversation.id, request.question),
-            daemon=True,
-        ).start()
+        start_title_generation(fast_llm, conversation.id, request.question)
 
     history = format_history(conversation, recent_messages(conversation))
 

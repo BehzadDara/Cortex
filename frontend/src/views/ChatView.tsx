@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  askImage,
   chat,
   deleteConversation,
   getCollections,
@@ -17,6 +18,7 @@ type Mode = "ask" | "chat" | "agent";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  pending?: boolean;
   tools?: string[];
   trace?: AgentResult;
 }
@@ -25,6 +27,12 @@ const MODE_HINTS: Record<Mode, string> = {
   ask: "Answers come from your indexed documents, with conversation memory.",
   chat: "The model decides which tools to use: document search, calculator, time.",
   agent: "Plans sub-questions, searches each, then synthesizes an answer.",
+};
+
+const PENDING_LABELS: Record<Mode, string> = {
+  ask: "Thinking",
+  chat: "Choosing tools",
+  agent: "Planning and searching",
 };
 
 function PencilIcon() {
@@ -43,6 +51,14 @@ function TrashIcon() {
   );
 }
 
+function PaperclipIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
 export default function ChatView() {
   const { id } = useParams();
   const routeId = id ? Number(id) : null;
@@ -55,9 +71,11 @@ export default function ChatView() {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
+  const [attachedImage, setAttachedImage] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
 
   function refreshConversations() {
     getConversations().then(setConversations).catch(() => {});
@@ -85,7 +103,6 @@ export default function ChatView() {
   async function openConversation(target: number) {
     try {
       const conversation = await getConversation(target);
-      setMode("ask");
       setConversationId(target);
       setError(null);
       setMessages(
@@ -103,61 +120,95 @@ export default function ChatView() {
     setMessages((current) => {
       const updated = [...current];
       const last = updated[updated.length - 1];
-      updated[updated.length - 1] = { ...last, content: last.content + token };
+      updated[updated.length - 1] = {
+        ...last,
+        content: last.pending ? token : last.content + token,
+        pending: false,
+      };
       return updated;
     });
+  }
+
+  function replaceLastMessage(message: ChatMessage) {
+    setMessages((current) => [...current.slice(0, -1), message]);
+  }
+
+  function adoptConversation(created: number, firstQuestion: string) {
+    setConversationId(created);
+    if (conversationId === null) {
+      setConversations((current) => [
+        {
+          id: created,
+          title: firstQuestion.slice(0, 80),
+          message_count: 0,
+          created_at: new Date().toISOString(),
+        },
+        ...current,
+      ]);
+      navigate(`/chats/${created}`, { replace: true });
+    }
+    refreshConversations();
+    setTimeout(refreshConversations, 4000);
   }
 
   async function submit() {
     const trimmed = question.trim();
     if (!trimmed || busy) return;
 
+    const image = attachedImage;
+    const existingId = conversationId;
+    const userContent = image ? `${trimmed} (image: ${image.name})` : trimmed;
+
     setError(null);
     setBusy(true);
     setQuestion("");
-    setMessages((current) => [...current, { role: "user", content: trimmed }]);
+    setAttachedImage(null);
+    if (imageInput.current) imageInput.current.value = "";
+    setMessages((current) => [
+      ...current,
+      { role: "user", content: userContent },
+      {
+        role: "assistant",
+        content: image ? "Reading the image" : PENDING_LABELS[mode],
+        pending: true,
+      },
+    ]);
 
     try {
-      if (mode === "ask") {
-        const existingId = conversationId;
-        setMessages((current) => [...current, { role: "assistant", content: "" }]);
+      if (image) {
+        const result = await askImage(image, trimmed, existingId);
+        replaceLastMessage({ role: "assistant", content: result.answer });
+        adoptConversation(result.conversation_id, trimmed);
+      } else if (mode === "ask") {
         await streamAsk(
           trimmed,
           collectionId,
           existingId,
-          (created) => {
-            setConversationId(created);
-            if (existingId === null) {
-              setConversations((current) => [
-                {
-                  id: created,
-                  title: trimmed.slice(0, 80),
-                  message_count: 0,
-                  created_at: new Date().toISOString(),
-                },
-                ...current,
-              ]);
-              navigate(`/chats/${created}`, { replace: true });
-            }
-          },
+          (created) => adoptConversation(created, trimmed),
           appendAssistantToken,
         );
         refreshConversations();
-        setTimeout(refreshConversations, 4000);
       } else if (mode === "chat") {
-        const result = await chat(trimmed);
-        setMessages((current) => [
-          ...current,
-          { role: "assistant", content: result.answer, tools: result.tools_used },
-        ]);
+        const result = await chat(trimmed, existingId);
+        replaceLastMessage({
+          role: "assistant",
+          content: result.answer,
+          tools: result.tools_used,
+        });
+        adoptConversation(result.conversation_id, trimmed);
       } else {
-        const result = await runAgent(trimmed, collectionId);
-        setMessages((current) => [
-          ...current,
-          { role: "assistant", content: result.answer, trace: result },
-        ]);
+        const result = await runAgent(trimmed, collectionId, existingId);
+        replaceLastMessage({
+          role: "assistant",
+          content: result.answer,
+          trace: result,
+        });
+        adoptConversation(result.conversation_id, trimmed);
       }
     } catch (caught) {
+      setMessages((current) =>
+        current[current.length - 1]?.pending ? current.slice(0, -1) : current,
+      );
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setBusy(false);
@@ -267,7 +318,14 @@ export default function ChatView() {
             )}
             {messages.map((message, index) => (
               <div key={index} className={`message ${message.role}`}>
-                {message.content || (busy && index === messages.length - 1 ? "…" : "")}
+                {message.pending ? (
+                  <span className="thinking">
+                    {message.content}
+                    <span className="dots" aria-hidden="true" />
+                  </span>
+                ) : (
+                  message.content
+                )}
                 {message.tools && message.tools.length > 0 && (
                   <div className="chips">
                     {message.tools.map((tool, i) => (
@@ -303,10 +361,44 @@ export default function ChatView() {
 
         <div className="chat-composer">
           <div className="chat-composer-inner">
+            {attachedImage && (
+              <div className="attachment">
+                <span className="chip">{attachedImage.name}</span>
+                <button
+                  className="danger"
+                  aria-label="Remove image"
+                  onClick={() => {
+                    setAttachedImage(null);
+                    if (imageInput.current) imageInput.current.value = "";
+                  }}
+                >
+                  remove
+                </button>
+              </div>
+            )}
             <div className="row">
               <input
+                ref={imageInput}
+                type="file"
+                accept=".png,.jpg,.jpeg"
+                style={{ display: "none" }}
+                onChange={(event) =>
+                  setAttachedImage(event.target.files?.[0] ?? null)
+                }
+              />
+              <button
+                className="ghost icon"
+                aria-label="Attach an image"
+                disabled={busy}
+                onClick={() => imageInput.current?.click()}
+              >
+                <PaperclipIcon />
+              </button>
+              <input
                 className="grow"
-                placeholder={busy ? "Thinking…" : "Ask a question…"}
+                placeholder={
+                  attachedImage ? "Ask about the image…" : "Ask a question…"
+                }
                 value={question}
                 disabled={busy}
                 onChange={(event) => setQuestion(event.target.value)}

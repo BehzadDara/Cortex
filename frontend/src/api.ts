@@ -5,6 +5,7 @@ import type {
   ConversationDetail,
   ConversationSummary,
   Doc,
+  ImageAnswer,
   Job,
   PromptLog,
   Stats,
@@ -96,14 +97,39 @@ export async function deleteDocument(id: number): Promise<void> {
   if (!response.ok) throw await toError(response);
 }
 
-export const chat = (question: string) =>
-  request<ChatResult>("/chat", jsonInit("POST", { question }));
+export const chat = (question: string, conversationId: number | null) =>
+  request<ChatResult>(
+    "/chat",
+    jsonInit("POST", { question, conversation_id: conversationId }),
+  );
 
-export const runAgent = (question: string, collectionId: number | null) =>
+export const runAgent = (
+  question: string,
+  collectionId: number | null,
+  conversationId: number | null,
+) =>
   request<AgentResult>(
     "/agent",
-    jsonInit("POST", { question, collection_id: collectionId }),
+    jsonInit("POST", {
+      question,
+      collection_id: collectionId,
+      conversation_id: conversationId,
+    }),
   );
+
+export async function askImage(
+  file: File,
+  question: string,
+  conversationId: number | null,
+): Promise<ImageAnswer> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("question", question);
+  if (conversationId !== null) form.append("conversation_id", String(conversationId));
+  const response = await fetch(`${BASE}/ask-image`, { method: "POST", body: form });
+  if (!response.ok) throw await toError(response);
+  return response.json();
+}
 
 export const getStats = () => request<Stats>("/stats");
 

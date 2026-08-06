@@ -521,6 +521,52 @@ tbody tr:hover {
 .message.assistant {
   align-self: flex-start;
   max-width: 90%;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.thinking {
+  color: var(--muted-foreground);
+}
+
+.dots::after {
+  content: "…";
+  animation: dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+.attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+button.ghost.icon {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  color: var(--muted-foreground);
+}
+
+button.ghost.icon:hover {
+  color: var(--foreground);
 }
 
 .chat-composer {

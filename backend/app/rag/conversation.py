@@ -37,6 +37,39 @@ def save_title(llm: LLMProvider, conversation_id: int, question: str) -> None:
             session.commit()
 
 
+def conversation_messages(conversation: Conversation) -> list[dict]:
+    messages: list[dict] = []
+    if conversation.summary:
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Summary of earlier conversation:\n{conversation.summary}",
+            }
+        )
+    messages.extend(
+        {"role": message.role, "content": message.content}
+        for message in recent_messages(conversation)
+    )
+    return messages
+
+
+def save_exchange(
+    conversation_id: int, question: str, answer: str, llm: LLMProvider
+) -> None:
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        session.add_all(
+            [
+                Message(conversation_id=conversation_id, role="user", content=question),
+                Message(
+                    conversation_id=conversation_id, role="assistant", content=answer
+                ),
+            ]
+        )
+        session.commit()
+        maybe_summarize(session, llm, conversation)
+
+
 def rewrite_question(llm: LLMProvider, history: str, question: str) -> str:
     rewritten = llm.complete(build_rewrite_prompt(history, question))
     return rewritten or question

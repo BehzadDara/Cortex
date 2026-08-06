@@ -36,6 +36,7 @@ export interface Job {
 }
 
 export interface ChatResult {
+  conversation_id: number;
   answer: string;
   tools_used: string[];
 }
@@ -46,8 +47,14 @@ export interface AgentStep {
 }
 
 export interface AgentResult {
+  conversation_id: number;
   plan: string[];
   steps: AgentStep[];
+  answer: string;
+}
+
+export interface ImageAnswer {
+  conversation_id: number;
   answer: string;
 }
 
