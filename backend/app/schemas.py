@@ -33,9 +33,24 @@ class RepositoryRequest(BaseModel):
     collection_id: int | None = None
 
 
-class BatchIngestResponse(BaseModel):
-    ingested: list[DocumentResponse]
-    skipped: int
+class JobResponse(BaseModel):
+    id: int
+    kind: str
+    status: str
+    detail: str | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+def to_job_response(job) -> JobResponse:
+    return JobResponse(
+        id=job.id,
+        kind=job.kind,
+        status=job.status,
+        detail=job.detail,
+        created_at=job.created_at,
+        finished_at=job.finished_at,
+    )
 
 
 class AskRequest(BaseModel):

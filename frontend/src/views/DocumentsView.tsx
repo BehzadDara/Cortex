@@ -6,6 +6,7 @@ import {
   indexRepository,
   indexWebsite,
   uploadDocument,
+  waitForJob,
 } from "../api";
 import type { Collection, Doc } from "../types";
 
@@ -54,18 +55,22 @@ export default function DocumentsView() {
   function crawl() {
     if (!url.trim()) return;
     run("url", async () => {
-      const result = await indexWebsite(url.trim(), collectionId);
+      const job = await indexWebsite(url.trim(), collectionId);
       setUrl("");
-      return `Indexed ${result.ingested.length} pages, skipped ${result.skipped}`;
+      const finished = await waitForJob(job.id);
+      if (finished.status === "failed") throw new Error(finished.detail ?? "Job failed");
+      return `Website job #${job.id}: ${finished.detail}`;
     });
   }
 
   function cloneRepository() {
     if (!repository.trim()) return;
     run("repository", async () => {
-      const result = await indexRepository(repository.trim(), collectionId);
+      const job = await indexRepository(repository.trim(), collectionId);
       setRepository("");
-      return `Indexed ${result.ingested.length} files, skipped ${result.skipped}`;
+      const finished = await waitForJob(job.id);
+      if (finished.status === "failed") throw new Error(finished.detail ?? "Job failed");
+      return `Repository job #${job.id}: ${finished.detail}`;
     });
   }
 

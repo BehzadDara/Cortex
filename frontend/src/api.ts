@@ -1,14 +1,19 @@
 import type {
   AgentResult,
-  BatchIngest,
   ChatResult,
   Collection,
   Doc,
+  Job,
   PromptLog,
   Stats,
 } from "./types";
 
 const BASE = "/api";
+
+export function authHeaders(): Record<string, string> {
+  const key = localStorage.getItem("cortex-api-key");
+  return key ? { "X-API-Key": key } : {};
+}
 
 async function toError(response: Response): Promise<Error> {
   const body = await response.json().catch(() => null);
@@ -16,7 +21,10 @@ async function toError(response: Response): Promise<Error> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, init);
+  const response = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+  });
   if (!response.ok) throw await toError(response);
   return response.json();
 }
@@ -35,7 +43,10 @@ export const createCollection = (name: string) =>
   request<Collection>("/collections", jsonInit("POST", { name }));
 
 export async function deleteCollection(id: number): Promise<void> {
-  const response = await fetch(`${BASE}/collections/${id}`, { method: "DELETE" });
+  const response = await fetch(`${BASE}/collections/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   if (!response.ok) throw await toError(response);
 }
 
@@ -48,25 +59,42 @@ export async function uploadDocument(
   const form = new FormData();
   form.append("file", file);
   if (collectionId !== null) form.append("collection_id", String(collectionId));
-  const response = await fetch(`${BASE}/documents`, { method: "POST", body: form });
+  const response = await fetch(`${BASE}/documents`, {
+    method: "POST",
+    body: form,
+    headers: authHeaders(),
+  });
   if (!response.ok) throw await toError(response);
   return response.json();
 }
 
 export const indexWebsite = (url: string, collectionId: number | null) =>
-  request<BatchIngest>(
+  request<Job>(
     "/documents/url",
     jsonInit("POST", { url, collection_id: collectionId }),
   );
 
 export const indexRepository = (url: string, collectionId: number | null) =>
-  request<BatchIngest>(
+  request<Job>(
     "/documents/repository",
     jsonInit("POST", { url, collection_id: collectionId }),
   );
 
+export const getJob = (id: number) => request<Job>(`/jobs/${id}`);
+
+export async function waitForJob(id: number): Promise<Job> {
+  while (true) {
+    const job = await getJob(id);
+    if (job.status === "done" || job.status === "failed") return job;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+}
+
 export async function deleteDocument(id: number): Promise<void> {
-  const response = await fetch(`${BASE}/documents/${id}`, { method: "DELETE" });
+  const response = await fetch(`${BASE}/documents/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   if (!response.ok) throw await toError(response);
 }
 
@@ -89,14 +117,15 @@ export async function streamAsk(
   conversationId: number | null,
   onToken: (token: string) => void,
 ): Promise<number | null> {
-  const response = await fetch(
-    `${BASE}/ask`,
-    jsonInit("POST", {
-      question,
-      collection_id: collectionId,
-      conversation_id: conversationId,
-    }),
-  );
+  const init = jsonInit("POST", {
+    question,
+    collection_id: collectionId,
+    conversation_id: conversationId,
+  });
+  const response = await fetch(`${BASE}/ask`, {
+    ...init,
+    headers: { ...authHeaders(), ...(init.headers as Record<string, string>) },
+  });
   if (!response.ok || !response.body) throw await toError(response);
 
   const newConversationId = Number(response.headers.get("X-Conversation-Id"));

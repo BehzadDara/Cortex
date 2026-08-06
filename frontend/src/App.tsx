@@ -9,11 +9,19 @@ type View = (typeof VIEWS)[number];
 
 export default function App() {
   const [view, setView] = useState<View>("Chat");
+  const [apiKey, setApiKey] = useState(
+    localStorage.getItem("cortex-api-key") ?? "",
+  );
+
+  function updateKey(value: string) {
+    setApiKey(value);
+    localStorage.setItem("cortex-api-key", value);
+  }
 
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">🧠 Cortex</span>
+        <span className="brand">Cortex</span>
         <nav className="nav">
           {VIEWS.map((name) => (
             <button
@@ -25,6 +33,13 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <input
+          type="password"
+          placeholder="API key"
+          value={apiKey}
+          onChange={(event) => updateKey(event.target.value)}
+          style={{ width: 130 }}
+        />
       </header>
       <main className="content">
         {view === "Chat" && <ChatView />}

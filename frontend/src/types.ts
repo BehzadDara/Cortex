@@ -13,9 +13,13 @@ export interface Doc {
   created_at: string;
 }
 
-export interface BatchIngest {
-  ingested: Doc[];
-  skipped: number;
+export interface Job {
+  id: number;
+  kind: string;
+  status: string;
+  detail: string | null;
+  created_at: string;
+  finished_at: string | null;
 }
 
 export interface ChatResult {
