@@ -37,6 +37,8 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **LLM Service** — Builds the prompt from retrieved context and streams the answer.
 
+**Conversation memory** — `/ask` accepts a `conversation_id` (a new one is created and returned in the `X-Conversation-Id` header otherwise). Follow-up questions are rewritten into standalone questions by the LLM before retrieval. The answer prompt carries the conversation summary plus the most recent messages; older messages are folded into the summary incrementally after each exchange.
+
 **Storage** — PostgreSQL is the source of truth: documents, chunks, logs, and later collections and users. Schema is managed with Alembic. Qdrant stores one vector per chunk; keeping the two in sync is the ingestion service's responsibility.
 
 ## Abstractions

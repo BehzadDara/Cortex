@@ -13,7 +13,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **7. Git repository indexing** — Clone a repo, code-aware chunking, index source and Markdown.
 - [x] **8. Hybrid search** — Postgres full-text (`tsvector`) + Qdrant vector search, merged with reciprocal rank fusion. Measured: 97% → 100% hit rate@5.
 - [x] **9. Re-ranking** — Cross-encoder narrows top-30 to top-5. Measured: hit@1 86% → 100%, MRR 0.925 → 1.000.
-- [ ] **10. Conversation memory** — Chat history, summarization, user preferences.
+- [x] **10. Conversation memory** — Chat history, summarization, user preferences.
 - [ ] **11. Tool calling** — Document search, calculator, current time as callable tools. Larger model (8B+) or API provider behind the existing LLM abstraction.
 - [ ] **12. Agents** — Planner → retriever → reasoner workflow.
 - [ ] **13. OCR & multimodal** — Scanned PDFs, images, diagrams.
