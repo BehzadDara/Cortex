@@ -4,11 +4,12 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_embedding_provider, get_session, get_vector_store
 from app.models import Collection, Document
+from app.rag.crawler import crawl
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.ingestion import DuplicateDocumentError, ingest_document
 from app.rag.parsers import parser_for, supported_suffixes
 from app.rag.vector_store import VectorStore
-from app.schemas import DocumentResponse
+from app.schemas import CrawlRequest, CrawlResponse, DocumentResponse
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -54,6 +55,42 @@ def upload_document(
         raise HTTPException(status_code=409, detail=str(error))
 
     return to_response(document)
+
+
+@router.post("/url", response_model=CrawlResponse)
+def index_website(
+    request: CrawlRequest,
+    session: Session = Depends(get_session),
+    embeddings: EmbeddingProvider = Depends(get_embedding_provider),
+    vector_store: VectorStore = Depends(get_vector_store),
+) -> CrawlResponse:
+    if (
+        request.collection_id is not None
+        and session.get(Collection, request.collection_id) is None
+    ):
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    pages = crawl(request.url, request.max_pages)
+    if not pages:
+        raise HTTPException(status_code=422, detail="No pages could be crawled")
+
+    ingested = []
+    skipped = 0
+    for page in pages:
+        try:
+            document = ingest_document(
+                session,
+                page.url,
+                page.text,
+                embeddings,
+                vector_store,
+                request.collection_id,
+            )
+            ingested.append(to_response(document))
+        except DuplicateDocumentError:
+            skipped += 1
+
+    return CrawlResponse(ingested=ingested, skipped=skipped)
 
 
 @router.get("", response_model=list[DocumentResponse])

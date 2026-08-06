@@ -31,7 +31,7 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **Backend (FastAPI)** — Exposes the API: document upload, question answering (SSE streaming), and later collections, tools, and agents. Thin route handlers; all logic lives in services.
 
-**Ingestion** — Takes a file, parses it to text, splits it into chunks, stores chunk + metadata (source, position) in Postgres, embeds each chunk, and stores the vector in Qdrant with the chunk id as payload. Metadata is stored from day one so citations can be added later without re-ingesting.
+**Ingestion** — Takes a file (or a crawled web page), parses it to text, splits it into chunks, stores chunk + metadata (source, position) in Postgres, embeds each chunk, and stores the vector in Qdrant with the chunk id as payload. Metadata is stored from day one so citations can be added later without re-ingesting. The crawler does a same-domain breadth-first crawl with a page cap, strips HTML boilerplate, and feeds each page through the same pipeline; unchanged pages are skipped by the content hash.
 
 **Retrieval** — Embeds the query, asks Qdrant for the top-k most similar vectors (cosine similarity), and loads the matching chunks from Postgres. Later phases extend this with full-text search (hybrid) and cross-encoder re-ranking without changing its interface.
 

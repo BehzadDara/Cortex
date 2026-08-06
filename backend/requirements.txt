@@ -9,3 +9,4 @@ qdrant-client
 python-multipart
 pypdf
 python-docx
+beautifulsoup4
