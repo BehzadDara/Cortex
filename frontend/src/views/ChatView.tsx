@@ -15,12 +15,27 @@ import type { AgentResult, Collection, ConversationSummary } from "../types";
 
 type Mode = "ask" | "chat" | "agent";
 
+interface Attachment {
+  name: string;
+  url?: string;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
+  attachment?: Attachment;
   tools?: string[];
   trace?: AgentResult;
+}
+
+function parseStoredContent(content: string): {
+  content: string;
+  attachment?: Attachment;
+} {
+  const match = content.match(/^([\s\S]*?)\s*\(image: (.+)\)$/);
+  if (!match) return { content };
+  return { content: match[1], attachment: { name: match[2] } };
 }
 
 const MODE_HINTS: Record<Mode, string> = {
@@ -59,6 +74,32 @@ function PaperclipIcon() {
   );
 }
 
+function FileIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    </svg>
+  );
+}
+
+function AttachmentCard({ attachment }: { attachment: Attachment }) {
+  if (attachment.url) {
+    return (
+      <figure className="message-attachment">
+        <img src={attachment.url} alt={attachment.name} />
+        <figcaption>{attachment.name}</figcaption>
+      </figure>
+    );
+  }
+  return (
+    <span className="message-attachment file">
+      <FileIcon />
+      {attachment.name}
+    </span>
+  );
+}
+
 export default function ChatView() {
   const { id } = useParams();
   const routeId = id ? Number(id) : null;
@@ -72,6 +113,7 @@ export default function ChatView() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [attachedImage, setAttachedImage] = useState<File | null>(null);
+  const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -106,10 +148,17 @@ export default function ChatView() {
       setConversationId(target);
       setError(null);
       setMessages(
-        conversation.messages.map((message) => ({
-          role: message.role === "user" ? "user" : "assistant",
-          content: message.content,
-        })),
+        conversation.messages.map((message) => {
+          const parsed =
+            message.role === "user"
+              ? parseStoredContent(message.content)
+              : { content: message.content };
+          return {
+            role: message.role === "user" ? ("user" as const) : ("assistant" as const),
+            content: parsed.content,
+            attachment: parsed.attachment,
+          };
+        }),
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -151,22 +200,41 @@ export default function ChatView() {
     setTimeout(refreshConversations, 4000);
   }
 
+  function clearAttachment() {
+    setAttachedImage(null);
+    setAttachedPreview(null);
+    if (imageInput.current) imageInput.current.value = "";
+  }
+
+  function attachImage(file: File | null) {
+    if (attachedPreview) URL.revokeObjectURL(attachedPreview);
+    setAttachedImage(file);
+    setAttachedPreview(file ? URL.createObjectURL(file) : null);
+  }
+
   async function submit() {
     const trimmed = question.trim();
     if (!trimmed || busy) return;
 
     const image = attachedImage;
+    const preview = attachedPreview;
     const existingId = conversationId;
-    const userContent = image ? `${trimmed} (image: ${image.name})` : trimmed;
 
     setError(null);
     setBusy(true);
     setQuestion("");
     setAttachedImage(null);
+    setAttachedPreview(null);
     if (imageInput.current) imageInput.current.value = "";
     setMessages((current) => [
       ...current,
-      { role: "user", content: userContent },
+      {
+        role: "user",
+        content: trimmed,
+        attachment: image
+          ? { name: image.name, url: preview ?? undefined }
+          : undefined,
+      },
       {
         role: "assistant",
         content: image ? "Reading the image" : PENDING_LABELS[mode],
@@ -318,6 +386,9 @@ export default function ChatView() {
             )}
             {messages.map((message, index) => (
               <div key={index} className={`message ${message.role}`}>
+                {message.attachment && (
+                  <AttachmentCard attachment={message.attachment} />
+                )}
                 {message.pending ? (
                   <span className="thinking">
                     {message.content}
@@ -361,19 +432,19 @@ export default function ChatView() {
 
         <div className="chat-composer">
           <div className="chat-composer-inner">
-            {attachedImage && (
-              <div className="attachment">
-                <span className="chip">{attachedImage.name}</span>
-                <button
-                  className="danger"
-                  aria-label="Remove image"
-                  onClick={() => {
-                    setAttachedImage(null);
-                    if (imageInput.current) imageInput.current.value = "";
-                  }}
-                >
-                  remove
-                </button>
+            {attachedImage && attachedPreview && (
+              <div className="attachment-preview">
+                <img src={attachedPreview} alt={attachedImage.name} />
+                <div className="attachment-meta">
+                  <span className="attachment-name">{attachedImage.name}</span>
+                  <button
+                    className="danger"
+                    aria-label="Remove image"
+                    onClick={clearAttachment}
+                  >
+                    remove
+                  </button>
+                </div>
               </div>
             )}
             <div className="row">
@@ -382,9 +453,7 @@ export default function ChatView() {
                 type="file"
                 accept=".png,.jpg,.jpeg"
                 style={{ display: "none" }}
-                onChange={(event) =>
-                  setAttachedImage(event.target.files?.[0] ?? null)
-                }
+                onChange={(event) => attachImage(event.target.files?.[0] ?? null)}
               />
               <button
                 className="ghost icon"
