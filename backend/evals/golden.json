@@ -148,5 +148,29 @@
     "expected_phrases": ["index"],
     "source_document": "git-basics.md",
     "source_phrase": "also called the index"
+  },
+  {
+    "question": "At what altitude does the International Space Station orbit?",
+    "expected_phrases": ["400"],
+    "source_document": "space-station.pdf",
+    "source_phrase": "400 kilometers"
+  },
+  {
+    "question": "How much taller do astronauts grow on the ISS?",
+    "expected_phrases": ["five centimeters"],
+    "source_document": "space-station.pdf",
+    "source_phrase": "five centimeters taller"
+  },
+  {
+    "question": "From which plant does all true tea come?",
+    "expected_phrases": ["Camellia sinensis"],
+    "source_document": "tea.docx",
+    "source_phrase": "Camellia sinensis"
+  },
+  {
+    "question": "What is the difference between green tea and black tea?",
+    "expected_phrases": ["oxid"],
+    "source_document": "tea.docx",
+    "source_phrase": "fully oxidized"
   }
 ]

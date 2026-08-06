@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-06 — Schema migrations are not data migrations
+
+Adding `content_hash` for duplicate detection looked done once the column migrated — but documents ingested before the migration had NULL hashes, so re-uploading one of them slipped past the duplicate check. Lesson: a new constraint only protects rows written after it; existing rows need a backfill (or, in dev, deletion and re-ingestion). The column stays nullable because the original text cannot be reconstructed from overlapping chunks.
+
 ## 2026-08-06 — Evaluation baseline
 
 First eval run over 3 documents (6 chunks), 25 golden questions, qwen3:4b with thinking enabled:

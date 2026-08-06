@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,13 +5,12 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_embedding_provider, get_session, get_vector_store
 from app.models import Document
 from app.rag.embeddings import EmbeddingProvider
-from app.rag.ingestion import ingest_document
+from app.rag.ingestion import DuplicateDocumentError, ingest_document
+from app.rag.parsers import parser_for, supported_suffixes
 from app.rag.vector_store import VectorStore
 from app.schemas import DocumentResponse
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-SUPPORTED_SUFFIXES = {".txt", ".md"}
 
 
 def to_response(document: Document) -> DocumentResponse:
@@ -32,12 +29,25 @@ def upload_document(
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
 ) -> DocumentResponse:
-    suffix = Path(file.filename).suffix.lower()
-    if suffix not in SUPPORTED_SUFFIXES:
-        raise HTTPException(status_code=415, detail=f"Unsupported file type: {suffix}")
+    parser = parser_for(file.filename)
+    if parser is None:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type. Supported: {supported_suffixes()}",
+        )
 
-    text = file.file.read().decode("utf-8")
-    document = ingest_document(session, file.filename, text, embeddings, vector_store)
+    try:
+        text = parser.parse(file.file.read())
+    except Exception:
+        raise HTTPException(status_code=422, detail="Could not parse file")
+
+    try:
+        document = ingest_document(
+            session, file.filename, text, embeddings, vector_store
+        )
+    except DuplicateDocumentError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+
     return to_response(document)
 
 
@@ -45,3 +55,18 @@ def upload_document(
 def list_documents(session: Session = Depends(get_session)) -> list[DocumentResponse]:
     documents = session.scalars(select(Document)).all()
     return [to_response(document) for document in documents]
+
+
+@router.delete("/{document_id}", status_code=204)
+def delete_document(
+    document_id: int,
+    session: Session = Depends(get_session),
+    vector_store: VectorStore = Depends(get_vector_store),
+) -> None:
+    document = session.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    vector_store.remove([chunk.id for chunk in document.chunks])
+    session.delete(document)
+    session.commit()

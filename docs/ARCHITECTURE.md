@@ -48,7 +48,7 @@ Business logic depends on interfaces only. Each concrete provider is one impleme
 | `LLMProvider`       | Ollama (Qwen3 4B)         | OpenAI-compatible API, Claude |
 | `EmbeddingProvider` | Ollama (nomic-embed-text) | Any embedding API            |
 | `VectorStore`       | Qdrant                    | pgvector, Chroma             |
-| `DocumentParser`    | Plain text / Markdown     | PDF, DOCX, OCR               |
+| `DocumentParser`    | txt/md, PDF, DOCX         | HTML, OCR                    |
 
 ## Data flow
 

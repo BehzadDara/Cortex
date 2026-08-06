@@ -1,3 +1,6 @@
+import hashlib
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -7,6 +10,11 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.vector_store import VectorStore
 
 
+class DuplicateDocumentError(Exception):
+    def __init__(self, filename: str) -> None:
+        super().__init__(f"Identical content already ingested as {filename}")
+
+
 def ingest_document(
     session: Session,
     filename: str,
@@ -14,7 +22,14 @@ def ingest_document(
     embeddings: EmbeddingProvider,
     vector_store: VectorStore,
 ) -> Document:
-    document = Document(filename=filename)
+    content_hash = hashlib.sha256(text.encode()).hexdigest()
+    duplicate = session.scalar(
+        select(Document).where(Document.content_hash == content_hash)
+    )
+    if duplicate:
+        raise DuplicateDocumentError(duplicate.filename)
+
+    document = Document(filename=filename, content_hash=content_hash)
     document.chunks = [
         Chunk(content=piece.content, position=piece.position)
         for piece in split_text(text, settings.chunk_size, settings.chunk_overlap)

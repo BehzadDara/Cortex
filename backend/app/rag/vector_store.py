@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
 
 from app.config import settings
 
@@ -17,6 +17,8 @@ class VectorStore(Protocol):
     def add(self, chunk_ids: list[int], vectors: list[list[float]]) -> None: ...
 
     def search(self, vector: list[float], limit: int) -> list[SearchResult]: ...
+
+    def remove(self, chunk_ids: list[int]) -> None: ...
 
 
 class QdrantVectorStore:
@@ -45,3 +47,9 @@ class QdrantVectorStore:
             collection_name=settings.qdrant_collection, query=vector, limit=limit
         ).points
         return [SearchResult(chunk_id=hit.id, score=hit.score) for hit in hits]
+
+    def remove(self, chunk_ids: list[int]) -> None:
+        self.client.delete(
+            collection_name=settings.qdrant_collection,
+            points_selector=PointIdsList(points=chunk_ids),
+        )

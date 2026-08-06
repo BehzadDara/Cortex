@@ -7,3 +7,5 @@ alembic
 httpx
 qdrant-client
 python-multipart
+pypdf
+python-docx
