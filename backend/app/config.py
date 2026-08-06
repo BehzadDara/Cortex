@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     rerank: bool = True
     rerank_candidates: int = 30
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    memory_recent_messages: int = 6
+    memory_summary_threshold: int = 4
 
 
 settings = Settings()

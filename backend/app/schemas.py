@@ -41,3 +41,15 @@ class BatchIngestResponse(BaseModel):
 class AskRequest(BaseModel):
     question: str
     collection_id: int | None = None
+    conversation_id: int | None = None
+
+
+class MessageResponse(BaseModel):
+    role: str
+    content: str
+
+
+class ConversationResponse(BaseModel):
+    id: int
+    summary: str | None
+    messages: list[MessageResponse]

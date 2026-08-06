@@ -2,7 +2,7 @@ import json
 import time
 from collections.abc import Iterator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,13 @@ from app.dependencies import (
     get_session,
     get_vector_store,
 )
-from app.models import PromptLog
+from app.models import Conversation, Message, PromptLog
+from app.rag.conversation import (
+    format_history,
+    maybe_summarize,
+    recent_messages,
+    rewrite_question,
+)
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_answer_prompt
@@ -25,6 +31,21 @@ from app.rag.vector_store import VectorStore
 from app.schemas import AskRequest
 
 router = APIRouter(tags=["ask"])
+
+
+def find_or_create_conversation(
+    session: Session, conversation_id: int | None
+) -> Conversation:
+    if conversation_id is not None:
+        conversation = session.get(Conversation, conversation_id)
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return conversation
+
+    conversation = Conversation()
+    session.add(conversation)
+    session.commit()
+    return conversation
 
 
 def save_prompt_log(question: str, prompt: str, response: str, started: float) -> None:
@@ -42,14 +63,38 @@ def save_prompt_log(question: str, prompt: str, response: str, started: float) -
         session.commit()
 
 
-def sse_events(llm: LLMProvider, prompt: str, question: str) -> Iterator[str]:
+def save_exchange(
+    conversation_id: int, question: str, answer: str, llm: LLMProvider
+) -> None:
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        session.add_all(
+            [
+                Message(
+                    conversation_id=conversation_id, role="user", content=question
+                ),
+                Message(
+                    conversation_id=conversation_id, role="assistant", content=answer
+                ),
+            ]
+        )
+        session.commit()
+        maybe_summarize(session, llm, conversation)
+
+
+def sse_events(
+    llm: LLMProvider, prompt: str, question: str, conversation_id: int
+) -> Iterator[str]:
     started = time.perf_counter()
     tokens: list[str] = []
     for token in llm.stream(prompt):
         tokens.append(token)
         yield f"data: {json.dumps(token)}\n\n"
     yield "data: [DONE]\n\n"
-    save_prompt_log(question, prompt, "".join(tokens), started)
+
+    answer = "".join(tokens)
+    save_prompt_log(question, prompt, answer, started)
+    save_exchange(conversation_id, question, answer, llm)
 
 
 @router.post("/ask")
@@ -61,16 +106,27 @@ def ask(
     llm: LLMProvider = Depends(get_llm_provider),
     reranker: Reranker = Depends(get_reranker),
 ) -> StreamingResponse:
+    conversation = find_or_create_conversation(session, request.conversation_id)
+    history = format_history(conversation, recent_messages(conversation))
+
+    search_question = request.question
+    if history:
+        search_question = rewrite_question(llm, history, request.question)
+
     chunks = retrieve_chunks(
         session,
-        request.question,
+        search_question,
         settings.top_k,
         embeddings,
         vector_store,
         collection_id=request.collection_id,
         reranker=reranker,
     )
-    prompt = build_answer_prompt([chunk.content for chunk in chunks], request.question)
+    prompt = build_answer_prompt(
+        [chunk.content for chunk in chunks], request.question, history or None
+    )
     return StreamingResponse(
-        sse_events(llm, prompt, request.question), media_type="text/event-stream"
+        sse_events(llm, prompt, request.question, conversation.id),
+        media_type="text/event-stream",
+        headers={"X-Conversation-Id": str(conversation.id)},
     )
