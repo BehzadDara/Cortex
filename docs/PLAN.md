@@ -4,14 +4,14 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 
 ## Steps
 
-- [x] **1. Setup** — Docker Compose (PostgreSQL + pgvector), FastAPI skeleton, Alembic migrations, Ollama with Qwen3 4B and nomic-embed-text.
+- [x] **1. Setup** — Docker Compose (PostgreSQL + Qdrant), FastAPI skeleton, Alembic migrations, Ollama with Qwen3 4B and nomic-embed-text.
 - [ ] **2. Minimal RAG** — Ingest `.txt` / `.md`: chunk → embed → store → retrieve top-k → answer with SSE streaming. Chunk metadata (source, position) stored from day one for future citations.
 - [ ] **3. Evaluation** — Golden set of 20–30 questions with expected answers and source chunks. Script reporting hit-rate@k. Every prompt/response/latency logged to a table.
 - [ ] **4. Documents** — PDF and DOCX parsing, file management, duplicate detection.
 - [ ] **5. Collections** — Group documents into collections, filter retrieval by collection.
 - [ ] **6. Website indexing** — Crawl a URL, clean HTML, chunk, index.
 - [ ] **7. Git repository indexing** — Clone a repo, code-aware chunking, index source and Markdown.
-- [ ] **8. Hybrid search** — Postgres full-text (`tsvector`) + vector search, merged. Measured.
+- [ ] **8. Hybrid search** — Postgres full-text (`tsvector`) + Qdrant vector search, merged with reciprocal rank fusion. Measured.
 - [ ] **9. Re-ranking** — Cross-encoder narrows top-30 to top-5. Measured.
 - [ ] **10. Conversation memory** — Chat history, summarization, user preferences.
 - [ ] **11. Tool calling** — Document search, calculator, current time as callable tools. Larger model (8B+) or API provider behind the existing LLM abstraction.

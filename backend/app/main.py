@@ -17,6 +17,14 @@ def database_status() -> str:
         return "down"
 
 
+def qdrant_status() -> str:
+    try:
+        httpx.get(f"{settings.qdrant_url}/healthz").raise_for_status()
+        return "up"
+    except Exception:
+        return "down"
+
+
 def ollama_status() -> str:
     try:
         httpx.get(f"{settings.ollama_url}/api/tags").raise_for_status()
@@ -27,4 +35,8 @@ def ollama_status() -> str:
 
 @app.get("/health")
 def health() -> dict:
-    return {"database": database_status(), "ollama": ollama_status()}
+    return {
+        "database": database_status(),
+        "qdrant": qdrant_status(),
+        "ollama": ollama_status(),
+    }

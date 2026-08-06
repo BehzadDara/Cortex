@@ -9,7 +9,8 @@ It is also a learning project: it starts as the simplest possible RAG applicatio
 ## Stack
 
 - **Backend** — Python, FastAPI
-- **Database** — PostgreSQL + pgvector
+- **Database** — PostgreSQL
+- **Vector DB** — Qdrant
 - **LLM** — Ollama (Qwen3 4B)
 - **Embeddings** — nomic-embed-text
 - **Frontend** — React + Vite
