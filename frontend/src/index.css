@@ -57,6 +57,7 @@ body {
   padding: 8px 14px;
   border-radius: 8px;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .nav-item:hover {

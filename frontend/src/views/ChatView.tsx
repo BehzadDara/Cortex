@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   chat,
   deleteConversation,
@@ -27,6 +28,10 @@ const MODE_HINTS: Record<Mode, string> = {
 };
 
 export default function ChatView() {
+  const { id } = useParams();
+  const routeId = id ? Number(id) : null;
+  const navigate = useNavigate();
+
   const [mode, setMode] = useState<Mode>("ask");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState<number | null>(null);
@@ -48,15 +53,24 @@ export default function ChatView() {
   }, []);
 
   useEffect(() => {
+    if (routeId === null) {
+      setConversationId(null);
+      setMessages([]);
+      setError(null);
+    } else if (routeId !== conversationId) {
+      openConversation(routeId);
+    }
+  }, [routeId]);
+
+  useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function openConversation(id: number) {
-    if (busy) return;
+  async function openConversation(target: number) {
     try {
-      const conversation = await getConversation(id);
+      const conversation = await getConversation(target);
       setMode("ask");
-      setConversationId(id);
+      setConversationId(target);
       setError(null);
       setMessages(
         conversation.messages.map((message) => ({
@@ -95,18 +109,19 @@ export default function ChatView() {
           trimmed,
           collectionId,
           existingId,
-          (id) => {
-            setConversationId(id);
+          (created) => {
+            setConversationId(created);
             if (existingId === null) {
               setConversations((current) => [
                 {
-                  id,
+                  id: created,
                   title: trimmed.slice(0, 80),
                   message_count: 0,
                   created_at: new Date().toISOString(),
                 },
                 ...current,
               ]);
+              navigate(`/chats/${created}`, { replace: true });
             }
           },
           appendAssistantToken,
@@ -133,12 +148,6 @@ export default function ChatView() {
     }
   }
 
-  function reset() {
-    setMessages([]);
-    setConversationId(null);
-    setError(null);
-  }
-
   async function rename(conversation: ConversationSummary) {
     const title = window.prompt("Rename chat", conversation.title);
     if (title === null || !title.trim()) return;
@@ -154,7 +163,7 @@ export default function ChatView() {
     if (!window.confirm(`Delete "${conversation.title}"?`)) return;
     try {
       await deleteConversation(conversation.id);
-      if (conversation.id === conversationId) reset();
+      if (conversation.id === conversationId) navigate("/chats");
       refreshConversations();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -164,7 +173,11 @@ export default function ChatView() {
   return (
     <div className="chat-layout">
       <aside className="chat-sidebar">
-        <button className="primary" style={{ width: "100%" }} onClick={reset}>
+        <button
+          className="primary"
+          style={{ width: "100%" }}
+          onClick={() => navigate("/chats")}
+        >
           New chat
         </button>
         {conversations.map((conversation) => (
@@ -176,7 +189,7 @@ export default function ChatView() {
           >
             <button
               className="chat-item-main"
-              onClick={() => openConversation(conversation.id)}
+              onClick={() => navigate(`/chats/${conversation.id}`)}
             >
               <span className="chat-item-title">{conversation.title}</span>
               <span className="hint">{conversation.message_count} messages</span>
@@ -220,12 +233,6 @@ export default function ChatView() {
                 </option>
               ))}
             </select>
-          )}
-          <button className="ghost" onClick={reset}>
-            New conversation
-          </button>
-          {conversationId && mode === "ask" && (
-            <span className="hint">conversation #{conversationId}</span>
           )}
         </div>
         <p className="hint" style={{ marginTop: 10 }}>
