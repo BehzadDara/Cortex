@@ -13,6 +13,19 @@ export interface Doc {
   created_at: string;
 }
 
+export interface ConversationSummary {
+  id: number;
+  title: string;
+  message_count: number;
+  created_at: string;
+}
+
+export interface ConversationDetail {
+  id: number;
+  summary: string | null;
+  messages: { role: string; content: string }[];
+}
+
 export interface Job {
   id: number;
   kind: string;

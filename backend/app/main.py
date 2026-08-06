@@ -1,5 +1,5 @@
 import httpx
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api import (
@@ -15,19 +15,17 @@ from app.api import (
 )
 from app.config import settings
 from app.database import engine
-from app.security import require_api_key
 
 app = FastAPI(title="Cortex")
-secured = [Depends(require_api_key)]
-app.include_router(collections.router, dependencies=secured)
-app.include_router(documents.router, dependencies=secured)
-app.include_router(conversations.router, dependencies=secured)
-app.include_router(ask.router, dependencies=secured)
-app.include_router(chat.router, dependencies=secured)
-app.include_router(agent.router, dependencies=secured)
-app.include_router(vision.router, dependencies=secured)
-app.include_router(stats.router, dependencies=secured)
-app.include_router(jobs.router, dependencies=secured)
+app.include_router(collections.router)
+app.include_router(documents.router)
+app.include_router(conversations.router)
+app.include_router(ask.router)
+app.include_router(chat.router)
+app.include_router(agent.router)
+app.include_router(vision.router)
+app.include_router(stats.router)
+app.include_router(jobs.router)
 
 
 def database_status() -> str:

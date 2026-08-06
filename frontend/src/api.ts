@@ -2,6 +2,8 @@ import type {
   AgentResult,
   ChatResult,
   Collection,
+  ConversationDetail,
+  ConversationSummary,
   Doc,
   Job,
   PromptLog,
@@ -10,21 +12,13 @@ import type {
 
 const BASE = "/api";
 
-export function authHeaders(): Record<string, string> {
-  const key = localStorage.getItem("cortex-api-key");
-  return key ? { "X-API-Key": key } : {};
-}
-
 async function toError(response: Response): Promise<Error> {
   const body = await response.json().catch(() => null);
   return new Error(body?.detail ?? `Request failed with ${response.status}`);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
-  });
+  const response = await fetch(`${BASE}${path}`, init);
   if (!response.ok) throw await toError(response);
   return response.json();
 }
@@ -43,12 +37,15 @@ export const createCollection = (name: string) =>
   request<Collection>("/collections", jsonInit("POST", { name }));
 
 export async function deleteCollection(id: number): Promise<void> {
-  const response = await fetch(`${BASE}/collections/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
+  const response = await fetch(`${BASE}/collections/${id}`, { method: "DELETE" });
   if (!response.ok) throw await toError(response);
 }
+
+export const getConversations = () =>
+  request<ConversationSummary[]>("/conversations");
+
+export const getConversation = (id: number) =>
+  request<ConversationDetail>(`/conversations/${id}`);
 
 export const getDocuments = () => request<Doc[]>("/documents");
 
@@ -59,11 +56,7 @@ export async function uploadDocument(
   const form = new FormData();
   form.append("file", file);
   if (collectionId !== null) form.append("collection_id", String(collectionId));
-  const response = await fetch(`${BASE}/documents`, {
-    method: "POST",
-    body: form,
-    headers: authHeaders(),
-  });
+  const response = await fetch(`${BASE}/documents`, { method: "POST", body: form });
   if (!response.ok) throw await toError(response);
   return response.json();
 }
@@ -91,10 +84,7 @@ export async function waitForJob(id: number): Promise<Job> {
 }
 
 export async function deleteDocument(id: number): Promise<void> {
-  const response = await fetch(`${BASE}/documents/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
+  const response = await fetch(`${BASE}/documents/${id}`, { method: "DELETE" });
   if (!response.ok) throw await toError(response);
 }
 
@@ -117,15 +107,14 @@ export async function streamAsk(
   conversationId: number | null,
   onToken: (token: string) => void,
 ): Promise<number | null> {
-  const init = jsonInit("POST", {
-    question,
-    collection_id: collectionId,
-    conversation_id: conversationId,
-  });
-  const response = await fetch(`${BASE}/ask`, {
-    ...init,
-    headers: { ...authHeaders(), ...(init.headers as Record<string, string>) },
-  });
+  const response = await fetch(
+    `${BASE}/ask`,
+    jsonInit("POST", {
+      question,
+      collection_id: collectionId,
+      conversation_id: conversationId,
+    }),
+  );
   if (!response.ok || !response.body) throw await toError(response);
 
   const newConversationId = Number(response.headers.get("X-Conversation-Id"));

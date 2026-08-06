@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-06 — API keys removed after being built
+
+Step 15 added API key auth (SHA-256 hashed at rest) and per-key rate limiting. Both worked, and both were removed the same day: for a single-user tool running on localhost, pasting a key into your own frontend is pure friction with no threat model behind it. The lesson kept: auth design (hash keys, meter usage per identity) and the discipline of removing features that don't pay their way. The git history preserves the implementation for when deployment or multi-user support makes it relevant.
+
 ## 2026-08-06 — Cross-encoder re-ranking measured
 
 Funnel: hybrid retrieval fetches top-30 candidates, `cross-encoder/ms-marco-MiniLM-L-6-v2` re-scores them, top-5 survive. Measured on 29 golden questions:

@@ -18,7 +18,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **12. Agents** — Planner → retriever → reasoner workflow via `/agent`, returning the full trace.
 - [x] **13. OCR & multimodal** — Images and scanned PDFs OCR'd by a local vision model (gemma3:4b); `/ask-image` for direct visual questions.
 - [x] **14. Dashboard** — Indexed documents, latency, token usage — built on the logs kept since step 3. Ships with the full React frontend: chat (ask/chat/agent modes with streaming), documents, collections, dashboard.
-- [x] **15. Production hardening** — API key auth (hashed at rest), per-key rate limiting, background jobs for crawl/repository indexing with status polling. Multi-user accounts and permissions remain future work.
+- [x] **15. Production hardening** — Background jobs for crawl/repository indexing with status polling. API key auth and rate limiting were built, then removed for the single-user local setup; they return with deployment or multi-user support.
 
 ## Principles
 

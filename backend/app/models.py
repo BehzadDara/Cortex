@@ -48,17 +48,6 @@ class Chunk(Base):
     document: Mapped[Document] = relationship(back_populates="chunks")
 
 
-class ApiKey(Base):
-    __tablename__ = "api_keys"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str]
-    key_hash: Mapped[str] = mapped_column(unique=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-
 class Job(Base):
     __tablename__ = "jobs"
 

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { chat, getCollections, runAgent, streamAsk } from "../api";
-import type { AgentResult, Collection } from "../types";
+import {
+  chat,
+  getCollections,
+  getConversation,
+  getConversations,
+  runAgent,
+  streamAsk,
+} from "../api";
+import type { AgentResult, Collection, ConversationSummary } from "../types";
 
 type Mode = "ask" | "chat" | "agent";
 
@@ -21,6 +28,7 @@ export default function ChatView() {
   const [mode, setMode] = useState<Mode>("ask");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState<number | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
@@ -28,13 +36,36 @@ export default function ChatView() {
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
+  function refreshConversations() {
+    getConversations().then(setConversations).catch(() => {});
+  }
+
   useEffect(() => {
     getCollections().then(setCollections).catch(() => {});
+    refreshConversations();
   }, []);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  async function openConversation(id: number) {
+    if (busy) return;
+    try {
+      const conversation = await getConversation(id);
+      setMode("ask");
+      setConversationId(id);
+      setError(null);
+      setMessages(
+        conversation.messages.map((message) => ({
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.content,
+        })),
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
 
   function appendAssistantToken(token: string) {
     setMessages((current) => {
@@ -64,6 +95,7 @@ export default function ChatView() {
           appendAssistantToken,
         );
         if (id) setConversationId(id);
+        refreshConversations();
       } else if (mode === "chat") {
         const result = await chat(trimmed);
         setMessages((current) => [
@@ -91,7 +123,25 @@ export default function ChatView() {
   }
 
   return (
-    <div>
+    <div className="chat-layout">
+      <aside className="chat-sidebar">
+        <button className="primary" style={{ width: "100%" }} onClick={reset}>
+          New chat
+        </button>
+        {conversations.map((conversation) => (
+          <button
+            key={conversation.id}
+            className={
+              conversation.id === conversationId ? "chat-item active" : "chat-item"
+            }
+            onClick={() => openConversation(conversation.id)}
+          >
+            <span className="chat-item-title">{conversation.title}</span>
+            <span className="hint">{conversation.message_count} messages</span>
+          </button>
+        ))}
+      </aside>
+      <div>
       <div className="panel">
         <div className="row">
           <div className="mode-switch">
@@ -183,6 +233,7 @@ export default function ChatView() {
           </button>
         </div>
         {error && <p className="error">{error}</p>}
+      </div>
       </div>
     </div>
   );

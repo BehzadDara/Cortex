@@ -257,6 +257,50 @@ td {
   margin-top: 4px;
 }
 
+.chat-layout {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.chat-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: sticky;
+  top: 16px;
+}
+
+.chat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.chat-item:hover {
+  border-color: var(--accent);
+}
+
+.chat-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.chat-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mode-switch {
   display: flex;
   gap: 4px;

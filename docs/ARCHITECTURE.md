@@ -86,13 +86,6 @@ The API is then available at `http://localhost:8000` with interactive docs at `h
 
 For the frontend:
 
-Create an API key and paste it into the field in the frontend's top bar (or send it as `X-API-Key`):
-
-```bash
-cd backend
-.venv/bin/python -m scripts.create_api_key dev
-```
-
 ```bash
 cd frontend
 npm install
@@ -101,11 +94,11 @@ npm run dev
 
 The app runs at `http://localhost:5173` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (ask, chat, and agent modes), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
 
-## Security and jobs
-
-All endpoints except `/health` require an `X-API-Key` header. Keys are created with `python -m scripts.create_api_key <name>` (printed once, stored only as a SHA-256 hash) and rate-limited per key with an in-memory sliding window (`RATE_LIMIT_PER_MINUTE`, default 60; per-process — a shared store like Redis would replace it in a multi-instance deployment). `AUTH_ENABLED=false` disables auth for local experiments.
+## Background jobs
 
 Website and repository indexing run as background jobs: the endpoint returns `202` with a job id immediately and the work runs after the response (FastAPI `BackgroundTasks`, in-process; a task queue like Celery is the production upgrade). `GET /jobs/{id}` reports pending → running → done/failed with a result summary.
+
+The API is currently unauthenticated: Cortex runs as a single-user local tool. API keys with rate limiting were built in step 15 and deliberately removed afterwards (see DECISIONS.md); they return when the app is deployed or becomes multi-user.
 
 ## Evaluation
 

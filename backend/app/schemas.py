@@ -110,6 +110,13 @@ class MessageResponse(BaseModel):
     content: str
 
 
+class ConversationSummary(BaseModel):
+    id: int
+    title: str
+    message_count: int
+    created_at: datetime
+
+
 class ConversationResponse(BaseModel):
     id: int
     summary: str | None
