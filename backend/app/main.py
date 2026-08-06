@@ -2,7 +2,7 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from app.api import agent, ask, chat, collections, conversations, documents
+from app.api import agent, ask, chat, collections, conversations, documents, vision
 from app.config import settings
 from app.database import engine
 
@@ -13,6 +13,7 @@ app.include_router(conversations.router)
 app.include_router(ask.router)
 app.include_router(chat.router)
 app.include_router(agent.router)
+app.include_router(vision.router)
 
 
 def database_status() -> str:

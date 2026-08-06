@@ -44,6 +44,10 @@ class AskRequest(BaseModel):
     conversation_id: int | None = None
 
 
+class ImageAskResponse(BaseModel):
+    answer: str
+
+
 class AgentStepResponse(BaseModel):
     query: str
     findings: list[str]

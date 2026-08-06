@@ -26,6 +26,8 @@ SUMMARY_PROMPT = """Summarize the conversation below concisely. Keep facts, name
 Summary:"""
 
 
+TRANSCRIBE_PROMPT = """Transcribe all text visible in this image exactly. If the image contains diagrams, charts, or figures, describe each one briefly after the transcription. Output only the transcription and descriptions."""
+
 PLAN_PROMPT = """Break the question into at most {max_steps} short search queries that together gather the evidence needed to answer it. Each query must be self-contained and searchable on its own. Output one query per line, nothing else.
 
 Question: {question}

@@ -2,14 +2,20 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_embedding_provider, get_session, get_vector_store
+from app.dependencies import (
+    get_embedding_provider,
+    get_session,
+    get_vector_store,
+    get_vision_provider,
+)
 from app.models import Collection, Document
 from app.rag.crawler import crawl
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.ingestion import DuplicateDocumentError, ingest_document
-from app.rag.parsers import parser_for, supported_suffixes
+from app.rag.parsers import build_parsers, parser_for, supported_suffixes
 from app.rag.repository import collect_files
 from app.rag.vector_store import VectorStore
+from app.rag.vision import VisionProvider
 from app.schemas import (
     BatchIngestResponse,
     CrawlRequest,
@@ -37,12 +43,14 @@ def upload_document(
     session: Session = Depends(get_session),
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
+    vision: VisionProvider = Depends(get_vision_provider),
 ) -> DocumentResponse:
-    parser = parser_for(file.filename)
+    parsers = build_parsers(vision)
+    parser = parser_for(file.filename, parsers)
     if parser is None:
         raise HTTPException(
             status_code=415,
-            detail=f"Unsupported file type. Supported: {supported_suffixes()}",
+            detail=f"Unsupported file type. Supported: {supported_suffixes(parsers)}",
         )
 
     ensure_collection_exists(session, collection_id)

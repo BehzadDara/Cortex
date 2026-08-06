@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
 
     llm_model: str = "qwen3:4b"
+    vision_model: str = "gemma3:4b"
+    ocr_max_pages: int = 5
     embedding_model: str = "nomic-embed-text"
     embedding_dimensions: int = 768
     qdrant_collection: str = "chunks"
