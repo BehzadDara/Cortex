@@ -88,6 +88,8 @@ class PromptLog(Base):
     response: Mapped[str] = mapped_column(Text)
     model: Mapped[str]
     latency_ms: Mapped[int]
+    prompt_tokens: Mapped[int | None]
+    response_tokens: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

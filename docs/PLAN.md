@@ -17,12 +17,12 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **11. Tool calling** — Document search, calculator, current time as callable tools via `/chat`. Qwen3 4B handles single-tool selection reliably.
 - [x] **12. Agents** — Planner → retriever → reasoner workflow via `/agent`, returning the full trace.
 - [x] **13. OCR & multimodal** — Images and scanned PDFs OCR'd by a local vision model (gemma3:4b); `/ask-image` for direct visual questions.
-- [ ] **14. Dashboard** — Indexed documents, latency, token usage — built on the logs kept since step 3.
+- [x] **14. Dashboard** — Indexed documents, latency, token usage — built on the logs kept since step 3. Ships with the full React frontend: chat (ask/chat/agent modes with streaming), documents, collections, dashboard.
 - [ ] **15. Production hardening** — Auth, users, API keys, rate limiting, background jobs.
 
 ## Principles
 
-- Frontend (React + Vite) joins once the API is worth a UI — around step 4–5.
+- Frontend (React + Vite) lives in `frontend/`: Vite dev server proxies `/api` to the backend.
 - Redis, MinIO, and any other infrastructure are added only when a step needs them.
 - Decisions and lessons are recorded in `docs/DECISIONS.md` as they happen.
 

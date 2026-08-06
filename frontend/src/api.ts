@@ -1,0 +1,121 @@
+import type {
+  AgentResult,
+  BatchIngest,
+  ChatResult,
+  Collection,
+  Doc,
+  PromptLog,
+  Stats,
+} from "./types";
+
+const BASE = "/api";
+
+async function toError(response: Response): Promise<Error> {
+  const body = await response.json().catch(() => null);
+  return new Error(body?.detail ?? `Request failed with ${response.status}`);
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, init);
+  if (!response.ok) throw await toError(response);
+  return response.json();
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+export const getCollections = () => request<Collection[]>("/collections");
+
+export const createCollection = (name: string) =>
+  request<Collection>("/collections", jsonInit("POST", { name }));
+
+export async function deleteCollection(id: number): Promise<void> {
+  const response = await fetch(`${BASE}/collections/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await toError(response);
+}
+
+export const getDocuments = () => request<Doc[]>("/documents");
+
+export async function uploadDocument(
+  file: File,
+  collectionId: number | null,
+): Promise<Doc> {
+  const form = new FormData();
+  form.append("file", file);
+  if (collectionId !== null) form.append("collection_id", String(collectionId));
+  const response = await fetch(`${BASE}/documents`, { method: "POST", body: form });
+  if (!response.ok) throw await toError(response);
+  return response.json();
+}
+
+export const indexWebsite = (url: string, collectionId: number | null) =>
+  request<BatchIngest>(
+    "/documents/url",
+    jsonInit("POST", { url, collection_id: collectionId }),
+  );
+
+export const indexRepository = (url: string, collectionId: number | null) =>
+  request<BatchIngest>(
+    "/documents/repository",
+    jsonInit("POST", { url, collection_id: collectionId }),
+  );
+
+export async function deleteDocument(id: number): Promise<void> {
+  const response = await fetch(`${BASE}/documents/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await toError(response);
+}
+
+export const chat = (question: string) =>
+  request<ChatResult>("/chat", jsonInit("POST", { question }));
+
+export const runAgent = (question: string, collectionId: number | null) =>
+  request<AgentResult>(
+    "/agent",
+    jsonInit("POST", { question, collection_id: collectionId }),
+  );
+
+export const getStats = () => request<Stats>("/stats");
+
+export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);
+
+export async function streamAsk(
+  question: string,
+  collectionId: number | null,
+  conversationId: number | null,
+  onToken: (token: string) => void,
+): Promise<number | null> {
+  const response = await fetch(
+    `${BASE}/ask`,
+    jsonInit("POST", {
+      question,
+      collection_id: collectionId,
+      conversation_id: conversationId,
+    }),
+  );
+  if (!response.ok || !response.body) throw await toError(response);
+
+  const newConversationId = Number(response.headers.get("X-Conversation-Id"));
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+    for (const event of events) {
+      if (!event.startsWith("data: ")) continue;
+      const payload = event.slice(6);
+      if (payload === "[DONE]") return newConversationId;
+      onToken(JSON.parse(payload));
+    }
+  }
+  return Number.isNaN(newConversationId) ? null : newConversationId;
+}

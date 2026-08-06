@@ -48,7 +48,9 @@ def find_or_create_conversation(
     return conversation
 
 
-def save_prompt_log(question: str, prompt: str, response: str, started: float) -> None:
+def save_prompt_log(
+    question: str, prompt: str, response: str, started: float, usage: dict
+) -> None:
     latency_ms = int((time.perf_counter() - started) * 1000)
     with SessionLocal() as session:
         session.add(
@@ -58,6 +60,8 @@ def save_prompt_log(question: str, prompt: str, response: str, started: float) -
                 response=response,
                 model=settings.llm_model,
                 latency_ms=latency_ms,
+                prompt_tokens=usage.get("prompt_tokens"),
+                response_tokens=usage.get("response_tokens"),
             )
         )
         session.commit()
@@ -86,14 +90,15 @@ def sse_events(
     llm: LLMProvider, prompt: str, question: str, conversation_id: int
 ) -> Iterator[str]:
     started = time.perf_counter()
+    usage: dict = {}
     tokens: list[str] = []
-    for token in llm.stream(prompt):
+    for token in llm.stream(prompt, usage):
         tokens.append(token)
         yield f"data: {json.dumps(token)}\n\n"
     yield "data: [DONE]\n\n"
 
     answer = "".join(tokens)
-    save_prompt_log(question, prompt, answer, started)
+    save_prompt_log(question, prompt, answer, started, usage)
     save_exchange(conversation_id, question, answer, llm)
 
 

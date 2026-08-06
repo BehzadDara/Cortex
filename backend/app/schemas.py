@@ -48,6 +48,28 @@ class ImageAskResponse(BaseModel):
     answer: str
 
 
+class StatsResponse(BaseModel):
+    documents: int
+    chunks: int
+    collections: int
+    conversations: int
+    prompts: int
+    average_latency_ms: float | None
+    total_prompt_tokens: int
+    total_response_tokens: int
+
+
+class PromptLogResponse(BaseModel):
+    id: int
+    question: str
+    response: str
+    model: str
+    latency_ms: int
+    prompt_tokens: int | None
+    response_tokens: int | None
+    created_at: datetime
+
+
 class AgentStepResponse(BaseModel):
     query: str
     findings: list[str]

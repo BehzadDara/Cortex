@@ -22,7 +22,7 @@ class ChatReply:
 
 
 class LLMProvider(Protocol):
-    def stream(self, prompt: str) -> Iterator[str]: ...
+    def stream(self, prompt: str, usage: dict | None = None) -> Iterator[str]: ...
 
     def complete(self, prompt: str) -> str: ...
 
@@ -71,7 +71,7 @@ class OllamaLLMProvider:
         response.raise_for_status()
         return response.json()["response"].strip()
 
-    def stream(self, prompt: str) -> Iterator[str]:
+    def stream(self, prompt: str, usage: dict | None = None) -> Iterator[str]:
         request = {
             "model": settings.llm_model,
             "prompt": prompt,
@@ -85,6 +85,9 @@ class OllamaLLMProvider:
             response.raise_for_status()
             for line in response.iter_lines():
                 part = json.loads(line)
+                if part.get("done") and usage is not None:
+                    usage["prompt_tokens"] = part.get("prompt_eval_count")
+                    usage["response_tokens"] = part.get("eval_count")
                 token = part.get("response", "")
                 if token:
                     yield token
