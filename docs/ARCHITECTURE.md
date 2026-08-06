@@ -54,8 +54,6 @@ Business logic depends on interfaces only. Each concrete provider is one impleme
 
 ## How to run
 
-> The commands below land with step 1 of the plan; this section is kept current as the canonical way to run Cortex.
-
 Prerequisites: Docker, Python 3.12+, [Ollama](https://ollama.com).
 
 ```bash
@@ -65,9 +63,10 @@ ollama pull nomic-embed-text
 docker compose -f docker/docker-compose.yml up -d
 
 cd backend
-pip install -r requirements.txt
-alembic upgrade head
-uvicorn app.main:app --reload
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/alembic upgrade head
+.venv/bin/uvicorn app.main:app --reload
 ```
 
-The API is then available at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`.
+The API is then available at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`. `GET /health` reports the status of Postgres and Ollama.

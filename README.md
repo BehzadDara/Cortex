@@ -21,4 +21,4 @@ It is also a learning project: it starts as the simplest possible RAG applicatio
 
 ## Status
 
-🚧 Early days — currently at step 1 of the [plan](docs/PLAN.md).
+🚧 Early days — currently at step 2 of the [plan](docs/PLAN.md).
