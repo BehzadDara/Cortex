@@ -10,3 +10,4 @@ python-multipart
 pypdf
 python-docx
 beautifulsoup4
+GitPython

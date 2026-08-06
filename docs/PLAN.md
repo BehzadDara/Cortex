@@ -10,7 +10,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **4. Documents** — PDF and DOCX parsing, file management, duplicate detection.
 - [x] **5. Collections** — Group documents into collections, filter retrieval by collection.
 - [x] **6. Website indexing** — Crawl a URL, clean HTML, chunk, index.
-- [ ] **7. Git repository indexing** — Clone a repo, code-aware chunking, index source and Markdown.
+- [x] **7. Git repository indexing** — Clone a repo, code-aware chunking, index source and Markdown.
 - [ ] **8. Hybrid search** — Postgres full-text (`tsvector`) + Qdrant vector search, merged with reciprocal rank fusion. Measured.
 - [ ] **9. Re-ranking** — Cross-encoder narrows top-30 to top-5. Measured.
 - [ ] **10. Conversation memory** — Chat history, summarization, user preferences.

@@ -3,9 +3,8 @@ import hashlib
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models import Chunk, Document
-from app.rag.chunking import split_text
+from app.rag.chunking import split_for
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.vector_store import VectorStore
 
@@ -35,7 +34,7 @@ def ingest_document(
     )
     document.chunks = [
         Chunk(content=piece.content, position=piece.position)
-        for piece in split_text(text, settings.chunk_size, settings.chunk_overlap)
+        for piece in split_for(filename, text)
     ]
     session.add(document)
     session.flush()

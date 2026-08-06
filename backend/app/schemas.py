@@ -28,7 +28,12 @@ class CrawlRequest(BaseModel):
     max_pages: int = Field(default=5, ge=1, le=20)
 
 
-class CrawlResponse(BaseModel):
+class RepositoryRequest(BaseModel):
+    url: str
+    collection_id: int | None = None
+
+
+class BatchIngestResponse(BaseModel):
     ingested: list[DocumentResponse]
     skipped: int
 

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     chunk_size: int = 1000
     chunk_overlap: int = 200
+    code_chunk_lines: int = 60
+    code_chunk_overlap_lines: int = 10
     top_k: int = 5
 
 

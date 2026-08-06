@@ -8,8 +8,14 @@ from app.rag.crawler import crawl
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.ingestion import DuplicateDocumentError, ingest_document
 from app.rag.parsers import parser_for, supported_suffixes
+from app.rag.repository import collect_files
 from app.rag.vector_store import VectorStore
-from app.schemas import CrawlRequest, CrawlResponse, DocumentResponse
+from app.schemas import (
+    BatchIngestResponse,
+    CrawlRequest,
+    DocumentResponse,
+    RepositoryRequest,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -39,8 +45,7 @@ def upload_document(
             detail=f"Unsupported file type. Supported: {supported_suffixes()}",
         )
 
-    if collection_id is not None and session.get(Collection, collection_id) is None:
-        raise HTTPException(status_code=404, detail="Collection not found")
+    ensure_collection_exists(session, collection_id)
 
     try:
         text = parser.parse(file.file.read())
@@ -57,40 +62,76 @@ def upload_document(
     return to_response(document)
 
 
-@router.post("/url", response_model=CrawlResponse)
+def ingest_batch(
+    session: Session,
+    items: list[tuple[str, str]],
+    embeddings: EmbeddingProvider,
+    vector_store: VectorStore,
+    collection_id: int | None,
+) -> BatchIngestResponse:
+    ingested = []
+    skipped = 0
+    for name, text in items:
+        try:
+            document = ingest_document(
+                session, name, text, embeddings, vector_store, collection_id
+            )
+            ingested.append(to_response(document))
+        except DuplicateDocumentError:
+            skipped += 1
+    return BatchIngestResponse(ingested=ingested, skipped=skipped)
+
+
+def ensure_collection_exists(session: Session, collection_id: int | None) -> None:
+    if collection_id is not None and session.get(Collection, collection_id) is None:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+
+@router.post("/url", response_model=BatchIngestResponse)
 def index_website(
     request: CrawlRequest,
     session: Session = Depends(get_session),
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
-) -> CrawlResponse:
-    if (
-        request.collection_id is not None
-        and session.get(Collection, request.collection_id) is None
-    ):
-        raise HTTPException(status_code=404, detail="Collection not found")
+) -> BatchIngestResponse:
+    ensure_collection_exists(session, request.collection_id)
 
     pages = crawl(request.url, request.max_pages)
     if not pages:
         raise HTTPException(status_code=422, detail="No pages could be crawled")
 
-    ingested = []
-    skipped = 0
-    for page in pages:
-        try:
-            document = ingest_document(
-                session,
-                page.url,
-                page.text,
-                embeddings,
-                vector_store,
-                request.collection_id,
-            )
-            ingested.append(to_response(document))
-        except DuplicateDocumentError:
-            skipped += 1
+    return ingest_batch(
+        session,
+        [(page.url, page.text) for page in pages],
+        embeddings,
+        vector_store,
+        request.collection_id,
+    )
 
-    return CrawlResponse(ingested=ingested, skipped=skipped)
+
+@router.post("/repository", response_model=BatchIngestResponse)
+def index_repository(
+    request: RepositoryRequest,
+    session: Session = Depends(get_session),
+    embeddings: EmbeddingProvider = Depends(get_embedding_provider),
+    vector_store: VectorStore = Depends(get_vector_store),
+) -> BatchIngestResponse:
+    ensure_collection_exists(session, request.collection_id)
+
+    try:
+        files = collect_files(request.url)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Could not clone repository")
+    if not files:
+        raise HTTPException(status_code=422, detail="No indexable files found")
+
+    return ingest_batch(
+        session,
+        [(file.path, file.text) for file in files],
+        embeddings,
+        vector_store,
+        request.collection_id,
+    )
 
 
 @router.get("", response_model=list[DocumentResponse])
