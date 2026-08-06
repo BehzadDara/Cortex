@@ -30,14 +30,25 @@ class LLMProvider(Protocol):
 
 
 class OllamaLLMProvider:
+    def __init__(self, model: str | None = None, think: bool = True) -> None:
+        self.model = model or settings.llm_model
+        self.think = think
+
+    def base_request(self) -> dict:
+        request = {
+            "model": self.model,
+            "options": {"num_ctx": settings.llm_num_ctx},
+        }
+        if self.think:
+            request["think"] = True
+        return request
+
     def chat(self, messages: list[dict], tools: list[dict]) -> ChatReply:
         request = {
-            "model": settings.llm_model,
+            **self.base_request(),
             "messages": messages,
             "tools": tools,
             "stream": False,
-            "think": True,
-            "options": {"num_ctx": settings.llm_num_ctx},
         }
         response = httpx.post(
             f"{settings.ollama_url}/api/chat", json=request, timeout=300
@@ -58,13 +69,7 @@ class OllamaLLMProvider:
         )
 
     def complete(self, prompt: str) -> str:
-        request = {
-            "model": settings.llm_model,
-            "prompt": prompt,
-            "stream": False,
-            "think": True,
-            "options": {"num_ctx": settings.llm_num_ctx},
-        }
+        request = {**self.base_request(), "prompt": prompt, "stream": False}
         response = httpx.post(
             f"{settings.ollama_url}/api/generate", json=request, timeout=300
         )
@@ -72,13 +77,7 @@ class OllamaLLMProvider:
         return response.json()["response"].strip()
 
     def stream(self, prompt: str, usage: dict | None = None) -> Iterator[str]:
-        request = {
-            "model": settings.llm_model,
-            "prompt": prompt,
-            "stream": True,
-            "think": True,
-            "options": {"num_ctx": settings.llm_num_ctx},
-        }
+        request = {**self.base_request(), "prompt": prompt, "stream": True}
         with httpx.stream(
             "POST", f"{settings.ollama_url}/api/generate", json=request, timeout=300
         ) as response:

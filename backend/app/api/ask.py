@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from collections.abc import Iterator
 
@@ -10,6 +11,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.dependencies import (
     get_embedding_provider,
+    get_fast_llm_provider,
     get_llm_provider,
     get_reranker,
     get_session,
@@ -21,6 +23,7 @@ from app.rag.conversation import (
     maybe_summarize,
     recent_messages,
     rewrite_question,
+    save_title,
 )
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
@@ -89,13 +92,15 @@ def save_exchange(
 def sse_events(
     llm: LLMProvider, prompt: str, question: str, conversation_id: int
 ) -> Iterator[str]:
+    yield f"data: {json.dumps({'type': 'conversation', 'id': conversation_id})}\n\n"
+
     started = time.perf_counter()
     usage: dict = {}
     tokens: list[str] = []
     for token in llm.stream(prompt, usage):
         tokens.append(token)
-        yield f"data: {json.dumps(token)}\n\n"
-    yield "data: [DONE]\n\n"
+        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+    yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     answer = "".join(tokens)
     save_prompt_log(question, prompt, answer, started, usage)
@@ -109,9 +114,18 @@ def ask(
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
     llm: LLMProvider = Depends(get_llm_provider),
+    fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
 ) -> StreamingResponse:
+    is_new = request.conversation_id is None
     conversation = find_or_create_conversation(session, request.conversation_id)
+    if is_new:
+        threading.Thread(
+            target=save_title,
+            args=(fast_llm, conversation.id, request.question),
+            daemon=True,
+        ).start()
+
     history = format_history(conversation, recent_messages(conversation))
 
     search_question = request.question
@@ -133,5 +147,4 @@ def ask(
     return StreamingResponse(
         sse_events(llm, prompt, request.question, conversation.id),
         media_type="text/event-stream",
-        headers={"X-Conversation-Id": str(conversation.id)},
     )

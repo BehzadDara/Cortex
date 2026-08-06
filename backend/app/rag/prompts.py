@@ -9,6 +9,12 @@ Question: {question}
 
 Answer:"""
 
+TITLE_PROMPT = """Write a very short title (3 to 6 words) for a conversation that starts with the message below. Output only the title, without quotes.
+
+Message: {question}
+
+Title:"""
+
 REWRITE_PROMPT = """Rewrite the follow-up question into a self-contained question that can be understood without the conversation. Keep it short. Output only the rewritten question.
 
 Conversation:
@@ -42,6 +48,10 @@ Evidence:
 {evidence}
 
 Answer:"""
+
+
+def build_title_prompt(question: str) -> str:
+    return TITLE_PROMPT.format(question=question)
 
 
 def build_plan_prompt(question: str, max_steps: int) -> str:

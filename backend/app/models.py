@@ -65,6 +65,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str | None]
     summary: Mapped[str | None] = mapped_column(Text)
     summarized_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(

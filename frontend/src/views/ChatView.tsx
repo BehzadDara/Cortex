@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
   chat,
+  deleteConversation,
   getCollections,
   getConversation,
   getConversations,
+  renameConversation,
   runAgent,
   streamAsk,
 } from "../api";
@@ -87,15 +89,30 @@ export default function ChatView() {
 
     try {
       if (mode === "ask") {
+        const existingId = conversationId;
         setMessages((current) => [...current, { role: "assistant", content: "" }]);
-        const id = await streamAsk(
+        await streamAsk(
           trimmed,
           collectionId,
-          conversationId,
+          existingId,
+          (id) => {
+            setConversationId(id);
+            if (existingId === null) {
+              setConversations((current) => [
+                {
+                  id,
+                  title: trimmed.slice(0, 80),
+                  message_count: 0,
+                  created_at: new Date().toISOString(),
+                },
+                ...current,
+              ]);
+            }
+          },
           appendAssistantToken,
         );
-        if (id) setConversationId(id);
         refreshConversations();
+        setTimeout(refreshConversations, 4000);
       } else if (mode === "chat") {
         const result = await chat(trimmed);
         setMessages((current) => [
@@ -122,6 +139,28 @@ export default function ChatView() {
     setError(null);
   }
 
+  async function rename(conversation: ConversationSummary) {
+    const title = window.prompt("Rename chat", conversation.title);
+    if (title === null || !title.trim()) return;
+    try {
+      await renameConversation(conversation.id, title.trim());
+      refreshConversations();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function remove(conversation: ConversationSummary) {
+    if (!window.confirm(`Delete "${conversation.title}"?`)) return;
+    try {
+      await deleteConversation(conversation.id);
+      if (conversation.id === conversationId) reset();
+      refreshConversations();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
   return (
     <div className="chat-layout">
       <aside className="chat-sidebar">
@@ -129,16 +168,28 @@ export default function ChatView() {
           New chat
         </button>
         {conversations.map((conversation) => (
-          <button
+          <div
             key={conversation.id}
             className={
               conversation.id === conversationId ? "chat-item active" : "chat-item"
             }
-            onClick={() => openConversation(conversation.id)}
           >
-            <span className="chat-item-title">{conversation.title}</span>
-            <span className="hint">{conversation.message_count} messages</span>
-          </button>
+            <button
+              className="chat-item-main"
+              onClick={() => openConversation(conversation.id)}
+            >
+              <span className="chat-item-title">{conversation.title}</span>
+              <span className="hint">{conversation.message_count} messages</span>
+            </button>
+            <div className="chat-item-actions">
+              <button title="Rename" onClick={() => rename(conversation)}>
+                ✎
+              </button>
+              <button title="Delete" onClick={() => remove(conversation)}>
+                ×
+              </button>
+            </div>
+          </div>
         ))}
       </aside>
       <div>

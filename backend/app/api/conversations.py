@@ -4,16 +4,25 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_session
 from app.models import Conversation
-from app.schemas import ConversationResponse, ConversationSummary, MessageResponse
+from app.schemas import (
+    ConversationRename,
+    ConversationResponse,
+    ConversationSummary,
+    MessageResponse,
+)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
-def to_summary(conversation: Conversation) -> ConversationSummary:
+def fallback_title(conversation: Conversation) -> str:
     first_user = next(
         (message for message in conversation.messages if message.role == "user"), None
     )
-    title = first_user.content if first_user else "Empty conversation"
+    return first_user.content if first_user else "New chat"
+
+
+def to_summary(conversation: Conversation) -> ConversationSummary:
+    title = conversation.title or fallback_title(conversation)
     return ConversationSummary(
         id=conversation.id,
         title=title[:80],
@@ -30,6 +39,33 @@ def list_conversations(
         select(Conversation).order_by(Conversation.id.desc())
     ).all()
     return [to_summary(conversation) for conversation in conversations]
+
+
+@router.patch("/{conversation_id}", response_model=ConversationSummary)
+def rename_conversation(
+    conversation_id: int,
+    request: ConversationRename,
+    session: Session = Depends(get_session),
+) -> ConversationSummary:
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    conversation.title = request.title.strip()[:80]
+    session.commit()
+    return to_summary(conversation)
+
+
+@router.delete("/{conversation_id}", status_code=204)
+def delete_conversation(
+    conversation_id: int, session: Session = Depends(get_session)
+) -> None:
+    conversation = session.get(Conversation, conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    session.delete(conversation)
+    session.commit()
 
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)

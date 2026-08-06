@@ -47,6 +47,14 @@ export const getConversations = () =>
 export const getConversation = (id: number) =>
   request<ConversationDetail>(`/conversations/${id}`);
 
+export const renameConversation = (id: number, title: string) =>
+  request<ConversationSummary>(`/conversations/${id}`, jsonInit("PATCH", { title }));
+
+export async function deleteConversation(id: number): Promise<void> {
+  const response = await fetch(`${BASE}/conversations/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await toError(response);
+}
+
 export const getDocuments = () => request<Doc[]>("/documents");
 
 export async function uploadDocument(
@@ -105,8 +113,9 @@ export async function streamAsk(
   question: string,
   collectionId: number | null,
   conversationId: number | null,
+  onConversation: (id: number) => void,
   onToken: (token: string) => void,
-): Promise<number | null> {
+): Promise<void> {
   const response = await fetch(
     `${BASE}/ask`,
     jsonInit("POST", {
@@ -117,7 +126,6 @@ export async function streamAsk(
   );
   if (!response.ok || !response.body) throw await toError(response);
 
-  const newConversationId = Number(response.headers.get("X-Conversation-Id"));
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -128,12 +136,12 @@ export async function streamAsk(
     buffer += decoder.decode(value, { stream: true });
     const events = buffer.split("\n\n");
     buffer = events.pop() ?? "";
-    for (const event of events) {
-      if (!event.startsWith("data: ")) continue;
-      const payload = event.slice(6);
-      if (payload === "[DONE]") return newConversationId;
-      onToken(JSON.parse(payload));
+    for (const raw of events) {
+      if (!raw.startsWith("data: ")) continue;
+      const event = JSON.parse(raw.slice(6));
+      if (event.type === "conversation") onConversation(event.id);
+      else if (event.type === "token") onToken(event.content);
+      else if (event.type === "done") return;
     }
   }
-  return Number.isNaN(newConversationId) ? null : newConversationId;
 }

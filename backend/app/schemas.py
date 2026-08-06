@@ -117,6 +117,10 @@ class ConversationSummary(BaseModel):
     created_at: datetime
 
 
+class ConversationRename(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+
+
 class ConversationResponse(BaseModel):
     id: int
     summary: str | None

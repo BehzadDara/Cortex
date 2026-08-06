@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.rag.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
 from app.rag.llm import LLMProvider, OllamaLLMProvider
@@ -24,6 +25,11 @@ def get_embedding_provider() -> EmbeddingProvider:
 @lru_cache
 def get_llm_provider() -> LLMProvider:
     return OllamaLLMProvider()
+
+
+@lru_cache
+def get_fast_llm_provider() -> LLMProvider:
+    return OllamaLLMProvider(model=settings.fast_llm_model, think=False)
 
 
 @lru_cache
