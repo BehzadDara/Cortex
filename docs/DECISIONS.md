@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-06 — Web search fallback needs a relevance gate
+
+Added free web search (ddgs/DuckDuckGo, no API key) behind a `WebSearchProvider` abstraction: a `web_search` tool in chat mode, and a fallback in the agent when documents have nothing. First attempt never triggered — vector search has no concept of "no relevant results"; it always returns the nearest chunks, so findings were never empty. Fix: the cross-encoder already scores every candidate, and irrelevant pairs score below zero, so the agent now filters evidence by rerank score (`agent_min_relevance`, default 0.0) and falls back to the web only when nothing relevant survives. Lesson: "top-k" is not "relevant-k" — thresholds must come from a model that actually measures relevance. Web snippets are shallow evidence; fetching full pages for top results is the known upgrade.
+
 ## 2026-08-06 — API keys removed after being built
 
 Step 15 added API key auth (SHA-256 hashed at rest) and per-key rate limiting. Both worked, and both were removed the same day: for a single-user tool running on localhost, pasting a key into your own frontend is pure friction with no threat model behind it. The lesson kept: auth design (hash keys, meter usage per identity) and the discipline of removing features that don't pay their way. The git history preserves the implementation for when deployment or multi-user support makes it relevant.

@@ -9,6 +9,7 @@ from app.rag.prompts import build_plan_prompt, build_synthesize_prompt
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
 from app.rag.vector_store import VectorStore
+from app.rag.web_search import WebSearchProvider
 
 
 @dataclass
@@ -43,6 +44,17 @@ def format_evidence(steps: list[AgentStep]) -> str:
     return "\n\n---\n\n".join(sections)
 
 
+def web_findings(web_search: WebSearchProvider, query: str) -> list[str]:
+    try:
+        results = web_search.search(query)
+    except Exception:
+        return []
+    return [
+        f"[web: {result.url}]\n{result.title}\n{result.snippet}"
+        for result in results
+    ]
+
+
 def run_agent(
     session: Session,
     question: str,
@@ -50,6 +62,7 @@ def run_agent(
     vector_store: VectorStore,
     reranker: Reranker,
     llm: LLMProvider,
+    web_search: WebSearchProvider,
     collection_id: int | None = None,
 ) -> AgentResult:
     plan = make_plan(llm, question)
@@ -65,12 +78,15 @@ def run_agent(
             vector_store,
             collection_id=collection_id,
             reranker=reranker,
+            min_score=settings.agent_min_relevance,
         )
         fresh = [chunk for chunk in chunks if chunk.id not in seen_chunk_ids]
         seen_chunk_ids.update(chunk.id for chunk in fresh)
         findings = [
             f"[{chunk.document.filename}]\n{chunk.content}" for chunk in fresh
         ]
+        if not findings:
+            findings = web_findings(web_search, query)
         steps.append(AgentStep(query=query, findings=findings))
 
     answer = llm.complete(

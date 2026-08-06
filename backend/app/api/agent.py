@@ -10,6 +10,7 @@ from app.dependencies import (
     get_reranker,
     get_session,
     get_vector_store,
+    get_web_search,
 )
 from app.rag.conversation import (
     format_history,
@@ -21,6 +22,7 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
+from app.rag.web_search import WebSearchProvider
 from app.schemas import AgentResponse, AgentStepResponse, AskRequest
 
 router = APIRouter(tags=["agent"])
@@ -35,6 +37,7 @@ def agent(
     llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
+    web_search: WebSearchProvider = Depends(get_web_search),
 ) -> AgentResponse:
     conversation, is_new = find_or_create_conversation(
         session, request.conversation_id, request.question
@@ -54,6 +57,7 @@ def agent(
         vector_store,
         reranker,
         llm,
+        web_search,
         collection_id=request.collection_id,
     )
     save_exchange(conversation.id, request.question, result.answer, llm)

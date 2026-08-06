@@ -39,6 +39,7 @@ def retrieve_chunks(
     vector_store: VectorStore,
     collection_id: int | None = None,
     reranker: Reranker | None = None,
+    min_score: float | None = None,
 ) -> list[Chunk]:
     reranking = reranker is not None and settings.rerank
     candidates = settings.rerank_candidates if reranking else limit
@@ -63,6 +64,8 @@ def retrieve_chunks(
     if reranking:
         scores = reranker.rerank(question, [chunk.content for chunk in ordered])
         scored = sorted(zip(scores, ordered), key=lambda pair: pair[0], reverse=True)
+        if min_score is not None:
+            scored = [pair for pair in scored if pair[0] >= min_score]
         ordered = [chunk for _, chunk in scored]
 
     return ordered[:limit]

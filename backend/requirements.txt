@@ -14,3 +14,4 @@ GitPython
 sentence-transformers
 pypdfium2
 pillow
+ddgs

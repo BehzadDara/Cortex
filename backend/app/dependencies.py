@@ -10,6 +10,7 @@ from app.rag.llm import LLMProvider, OllamaLLMProvider
 from app.rag.reranking import CrossEncoderReranker, Reranker
 from app.rag.vector_store import QdrantVectorStore, VectorStore
 from app.rag.vision import OllamaVisionProvider, VisionProvider
+from app.rag.web_search import DdgsWebSearch, WebSearchProvider
 
 
 def get_session() -> Iterator[Session]:
@@ -45,3 +46,8 @@ def get_reranker() -> Reranker:
 @lru_cache
 def get_vision_provider() -> VisionProvider:
     return OllamaVisionProvider()
+
+
+@lru_cache
+def get_web_search() -> WebSearchProvider:
+    return DdgsWebSearch()

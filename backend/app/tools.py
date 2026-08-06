@@ -11,6 +11,7 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
 from app.rag.vector_store import VectorStore
+from app.rag.web_search import WebSearchProvider
 
 
 @dataclass
@@ -69,6 +70,7 @@ def build_tools(
     embeddings: EmbeddingProvider,
     vector_store: VectorStore,
     reranker: Reranker,
+    web_search: WebSearchProvider,
 ) -> list[Tool]:
     def search_documents(query: str) -> str:
         chunks = retrieve_chunks(
@@ -78,6 +80,14 @@ def build_tools(
             return "No matching documents found."
         return "\n\n---\n\n".join(
             f"[{chunk.document.filename}]\n{chunk.content}" for chunk in chunks
+        )
+
+    def search_web(query: str) -> str:
+        results = web_search.search(query)
+        if not results:
+            return "No web results found."
+        return "\n\n".join(
+            f"{result.title}\n{result.url}\n{result.snippet}" for result in results
         )
 
     return [
@@ -92,6 +102,18 @@ def build_tools(
                 "required": ["query"],
             },
             run=search_documents,
+        ),
+        Tool(
+            name="web_search",
+            description="Search the public web for current or general information that is not in the user's documents.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query"}
+                },
+                "required": ["query"],
+            },
+            run=search_web,
         ),
         Tool(
             name="calculator",

@@ -10,12 +10,14 @@ from app.dependencies import (
     get_reranker,
     get_session,
     get_vector_store,
+    get_web_search,
 )
 from app.rag.conversation import conversation_messages, save_exchange
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider, ToolCall
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
+from app.rag.web_search import WebSearchProvider
 from app.schemas import ChatRequest, ChatResponse
 from app.tools import Tool, build_tools, to_definition
 
@@ -79,6 +81,7 @@ def chat(
     llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
+    web_search: WebSearchProvider = Depends(get_web_search),
 ) -> ChatResponse:
     conversation, is_new = find_or_create_conversation(
         session, request.conversation_id, request.question
@@ -87,7 +90,7 @@ def chat(
         start_title_generation(fast_llm, conversation.id, request.question, {})
 
     history = conversation_messages(conversation)
-    tools = build_tools(session, embeddings, vector_store, reranker)
+    tools = build_tools(session, embeddings, vector_store, reranker, web_search)
     answer, used = run_tool_loop(llm, tools, request.question, history)
     save_exchange(conversation.id, request.question, answer, llm)
     return ChatResponse(
