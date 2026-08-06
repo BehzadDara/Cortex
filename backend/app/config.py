@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     memory_recent_messages: int = 6
     memory_summary_threshold: int = 4
+    chat_max_rounds: int = 5
 
 
 settings = Settings()

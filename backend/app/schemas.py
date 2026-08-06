@@ -44,6 +44,15 @@ class AskRequest(BaseModel):
     conversation_id: int | None = None
 
 
+class ChatRequest(BaseModel):
+    question: str
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    tools_used: list[str]
+
+
 class MessageResponse(BaseModel):
     role: str
     content: str

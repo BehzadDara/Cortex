@@ -14,7 +14,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **8. Hybrid search** — Postgres full-text (`tsvector`) + Qdrant vector search, merged with reciprocal rank fusion. Measured: 97% → 100% hit rate@5.
 - [x] **9. Re-ranking** — Cross-encoder narrows top-30 to top-5. Measured: hit@1 86% → 100%, MRR 0.925 → 1.000.
 - [x] **10. Conversation memory** — Chat history, summarization, user preferences.
-- [ ] **11. Tool calling** — Document search, calculator, current time as callable tools. Larger model (8B+) or API provider behind the existing LLM abstraction.
+- [x] **11. Tool calling** — Document search, calculator, current time as callable tools via `/chat`. Qwen3 4B handles single-tool selection reliably.
 - [ ] **12. Agents** — Planner → retriever → reasoner workflow.
 - [ ] **13. OCR & multimodal** — Scanned PDFs, images, diagrams.
 - [ ] **14. Dashboard** — Indexed documents, latency, token usage — built on the logs kept since step 3.
