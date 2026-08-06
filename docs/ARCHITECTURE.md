@@ -74,3 +74,15 @@ python3 -m venv .venv
 ```
 
 The API is then available at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`. `GET /health` reports the status of Postgres, Qdrant, and Ollama.
+
+## Evaluation
+
+`backend/evals/golden.json` holds golden questions with expected answers and source chunks. Run the eval after any change to chunking, retrieval, or prompts:
+
+```bash
+cd backend
+.venv/bin/python -m evals.run                  # retrieval + generation
+.venv/bin/python -m evals.run --retrieval-only # fast, no LLM
+```
+
+Every `/ask` request is logged to the `prompt_logs` table with question, full prompt, response, model, and latency.

@@ -29,3 +29,17 @@ class Chunk(Base):
     position: Mapped[int]
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class PromptLog(Base):
+    __tablename__ = "prompt_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    question: Mapped[str] = mapped_column(Text)
+    prompt: Mapped[str] = mapped_column(Text)
+    response: Mapped[str] = mapped_column(Text)
+    model: Mapped[str]
+    latency_ms: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

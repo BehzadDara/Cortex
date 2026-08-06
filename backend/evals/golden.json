@@ -1,0 +1,152 @@
+[
+  {
+    "question": "Which planet has the most moons?",
+    "expected_phrases": ["Saturn"],
+    "source_document": "solar-system.md",
+    "source_phrase": "146 confirmed moons"
+  },
+  {
+    "question": "What are the names of the moons of Mars?",
+    "expected_phrases": ["Phobos", "Deimos"],
+    "source_document": "solar-system.md",
+    "source_phrase": "Phobos and Deimos"
+  },
+  {
+    "question": "Which planet is the hottest?",
+    "expected_phrases": ["Venus"],
+    "source_document": "solar-system.md",
+    "source_phrase": "hottest planet"
+  },
+  {
+    "question": "What is the largest planet in the Solar System?",
+    "expected_phrases": ["Jupiter"],
+    "source_document": "solar-system.md",
+    "source_phrase": "largest planet"
+  },
+  {
+    "question": "What is the Great Red Spot?",
+    "expected_phrases": ["storm"],
+    "source_document": "solar-system.md",
+    "source_phrase": "Great Red Spot"
+  },
+  {
+    "question": "What is unusual about how Uranus rotates?",
+    "expected_phrases": ["side"],
+    "source_document": "solar-system.md",
+    "source_phrase": "axial tilt of about 98 degrees"
+  },
+  {
+    "question": "Which planet has the strongest winds?",
+    "expected_phrases": ["Neptune"],
+    "source_document": "solar-system.md",
+    "source_phrase": "windiest planet"
+  },
+  {
+    "question": "What is special about the orbit of Triton?",
+    "expected_phrases": ["backwards"],
+    "source_document": "solar-system.md",
+    "source_phrase": "orbits backwards"
+  },
+  {
+    "question": "When was Pluto reclassified as a dwarf planet?",
+    "expected_phrases": ["2006"],
+    "source_document": "solar-system.md",
+    "source_phrase": "reclassified"
+  },
+  {
+    "question": "Where is the asteroid belt located?",
+    "expected_phrases": ["Mars", "Jupiter"],
+    "source_document": "solar-system.md",
+    "source_phrase": "asteroid belt"
+  },
+  {
+    "question": "How many moons does Earth have?",
+    "expected_phrases": ["one"],
+    "source_document": "solar-system.md",
+    "source_phrase": "one moon"
+  },
+  {
+    "question": "Which planet is closest to the Sun?",
+    "expected_phrases": ["Mercury"],
+    "source_document": "solar-system.md",
+    "source_phrase": "closest to the Sun"
+  },
+  {
+    "question": "Who discovered coffee according to legend?",
+    "expected_phrases": ["Kaldi"],
+    "source_document": "coffee.md",
+    "source_phrase": "Kaldi"
+  },
+  {
+    "question": "Which coffee species contains more caffeine?",
+    "expected_phrases": ["obusta"],
+    "source_document": "coffee.md",
+    "source_phrase": "twice as much caffeine"
+  },
+  {
+    "question": "At what pressure is espresso brewed?",
+    "expected_phrases": ["9 bars"],
+    "source_document": "coffee.md",
+    "source_phrase": "9 bars of pressure"
+  },
+  {
+    "question": "How long does cold brew coffee steep?",
+    "expected_phrases": ["12", "24"],
+    "source_document": "coffee.md",
+    "source_phrase": "12 to 24 hours"
+  },
+  {
+    "question": "What is the ideal water temperature for brewing coffee?",
+    "expected_phrases": ["90", "96"],
+    "source_document": "coffee.md",
+    "source_phrase": "90 and 96 degrees"
+  },
+  {
+    "question": "How does the Swiss Water Process decaffeinate coffee?",
+    "expected_phrases": ["without chemical solvents"],
+    "source_document": "coffee.md",
+    "source_phrase": "Swiss Water Process"
+  },
+  {
+    "question": "What is a cappuccino made of?",
+    "expected_phrases": ["espresso", "steamed milk", "foam"],
+    "source_document": "coffee.md",
+    "source_phrase": "equal parts espresso"
+  },
+  {
+    "question": "Who created Git and when?",
+    "expected_phrases": ["Linus Torvalds", "2005"],
+    "source_document": "git-basics.md",
+    "source_phrase": "Linus Torvalds in 2005"
+  },
+  {
+    "question": "What is a branch in Git?",
+    "expected_phrases": ["pointer"],
+    "source_document": "git-basics.md",
+    "source_phrase": "movable pointer to a commit"
+  },
+  {
+    "question": "What is the difference between merging and rebasing?",
+    "expected_phrases": ["merge commit", "rewrit"],
+    "source_document": "git-basics.md",
+    "source_phrase": "moves commits onto a new base"
+  },
+  {
+    "question": "What does HEAD point to in Git?",
+    "expected_phrases": ["current branch"],
+    "source_document": "git-basics.md",
+    "source_phrase": "HEAD points to the current branch"
+  },
+  {
+    "question": "What is the golden rule of rebasing?",
+    "expected_phrases": ["never rebase"],
+    "source_document": "git-basics.md",
+    "source_phrase": "never rebase branches that are shared"
+  },
+  {
+    "question": "What is the staging area in Git also called?",
+    "expected_phrases": ["index"],
+    "source_document": "git-basics.md",
+    "source_phrase": "also called the index"
+  }
+]
