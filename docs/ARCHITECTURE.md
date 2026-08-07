@@ -82,7 +82,7 @@ python3 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload
 ```
 
-The API is then available at `http://localhost:8000` with interactive docs at `http://localhost:8000/docs`. `GET /health` reports the status of Postgres, Qdrant, and Ollama.
+The API is then available at `http://localhost:8100` (start uvicorn with `--port 8100`) with interactive docs at `http://localhost:8100/docs`. `GET /health` reports the status of Postgres, Qdrant, and Ollama.
 
 For the frontend:
 
@@ -92,7 +92,7 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://localhost:5173` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (ask, chat, and agent modes), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
+The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (ask, chat, and agent modes), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
 
 ## Background jobs
 
