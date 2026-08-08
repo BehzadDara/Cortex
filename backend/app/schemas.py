@@ -97,10 +97,17 @@ class ToolStep(BaseModel):
     result: str | None = None
 
 
+class SourceRef(BaseModel):
+    id: int
+    filename: str
+    content: str
+
+
 class MessageResponse(BaseModel):
     role: str
     content: str
     steps: list[ToolStep] | None = None
+    sources: list[SourceRef] | None = None
 
 
 class ConversationSummary(BaseModel):

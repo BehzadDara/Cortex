@@ -26,10 +26,21 @@ export interface ToolStep {
   result: string | null;
 }
 
+export interface Source {
+  id: number;
+  filename: string;
+  content: string;
+}
+
 export interface ConversationDetail {
   id: number;
   summary: string | null;
-  messages: { role: string; content: string; steps: ToolStep[] | null }[];
+  messages: {
+    role: string;
+    content: string;
+    steps: ToolStep[] | null;
+    sources: Source[] | null;
+  }[];
 }
 
 export interface Job {

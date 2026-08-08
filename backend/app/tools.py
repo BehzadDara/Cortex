@@ -65,14 +65,35 @@ def current_time() -> str:
     return datetime.now().astimezone().strftime("%A, %Y-%m-%d %H:%M:%S %Z")
 
 
-def build_tools(
+@dataclass
+class SourceChunk:
+    filename: str
+    content: str
+
+
+DOCUMENT_SEARCH_DEFINITION = {
+    "type": "function",
+    "function": {
+        "name": "search_documents",
+        "description": "Search the user's indexed documents and return the most relevant passages.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query"}
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
+def build_document_search(
     session: Session,
     embeddings: EmbeddingProvider,
     vector_store: VectorStore,
     reranker: Reranker,
-    web_search: WebSearchProvider,
-) -> list[Tool]:
-    def search_documents(query: str) -> str:
+):
+    def search_documents(query: str) -> list[SourceChunk]:
         chunks = retrieve_chunks(
             session,
             query,
@@ -82,12 +103,15 @@ def build_tools(
             reranker=reranker,
             min_score=settings.agent_min_relevance,
         )
-        if not chunks:
-            return "No matching documents found."
-        return "\n\n---\n\n".join(
-            f"[{chunk.document.filename}]\n{chunk.content}" for chunk in chunks
-        )
+        return [
+            SourceChunk(filename=chunk.document.filename, content=chunk.content)
+            for chunk in chunks
+        ]
 
+    return search_documents
+
+
+def build_tools(web_search: WebSearchProvider) -> list[Tool]:
     def search_web(query: str) -> str:
         results = web_search.search(query)
         if not results:
@@ -97,18 +121,6 @@ def build_tools(
         )
 
     return [
-        Tool(
-            name="search_documents",
-            description="Search the user's indexed documents and return the most relevant passages.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The search query"}
-                },
-                "required": ["query"],
-            },
-            run=search_documents,
-        ),
         Tool(
             name="web_search",
             description="Search the public web for current or general information that is not in the user's documents.",

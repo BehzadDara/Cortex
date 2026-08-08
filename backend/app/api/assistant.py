@@ -40,7 +40,7 @@ from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 from app.rag.web_search import WebSearchProvider
 from app.schemas import AskRequest, ResumeRequest
-from app.tools import build_tools
+from app.tools import build_document_search, build_tools
 
 router = APIRouter(tags=["assistant"])
 
@@ -55,8 +55,11 @@ def build_graph(
     web_search: WebSearchProvider,
     llm: LLMProvider,
 ):
-    tools = build_tools(session, embeddings, vector_store, reranker, web_search)
-    return build_assistant_graph(llm, tools, checkpointer=get_checkpointer())
+    tools = build_tools(web_search)
+    search_documents = build_document_search(session, embeddings, vector_store, reranker)
+    return build_assistant_graph(
+        llm, tools, search_documents, checkpointer=get_checkpointer()
+    )
 
 
 def format_transcript(messages: list[dict]) -> str:
@@ -133,6 +136,7 @@ def stream_events(
             answer,
             llm,
             steps=extract_steps(final_state["messages"]),
+            sources=final_state.get("sources"),
         )
 
 

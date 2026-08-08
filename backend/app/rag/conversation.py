@@ -55,6 +55,7 @@ def save_exchange(
     answer: str,
     llm: LLMProvider,
     steps: list[dict] | None = None,
+    sources: list[dict] | None = None,
 ) -> None:
     with SessionLocal() as session:
         conversation = session.get(Conversation, conversation_id)
@@ -66,6 +67,7 @@ def save_exchange(
                     role="assistant",
                     content=answer,
                     steps=steps or None,
+                    sources=sources or None,
                 ),
             ]
         )

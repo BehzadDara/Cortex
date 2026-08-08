@@ -8,7 +8,12 @@ from langgraph.types import interrupt
 
 from app.config import settings
 from app.rag.llm import LLMProvider, ToolCall
-from app.tools import Tool, to_definition
+from app.tools import (
+    DOCUMENT_SEARCH_DEFINITION,
+    SourceChunk,
+    Tool,
+    to_definition,
+)
 
 SYSTEM_PROMPT = (
     "You are Cortex, a helpful knowledge assistant. "
@@ -18,6 +23,10 @@ SYSTEM_PROMPT = (
     "search_documents call per sub-topic before anything else. "
     "Only use web_search when focused document searches also come back empty. "
     "Use the calculator for arithmetic and current_time for date or time. "
+    "Document passages are labeled with bracketed numbers like [1]. "
+    "When a claim in your answer comes from a passage, cite that passage's "
+    "number right after the claim, like [1] or [2][3]. "
+    "Cite only numbers that appear in the search results. "
     "Once you have the evidence, answer directly and concisely from it."
 )
 
@@ -32,6 +41,7 @@ RESULT_PREVIEW_CHARS = 500
 
 class AssistantState(TypedDict):
     messages: Annotated[list[dict], operator.add]
+    sources: Annotated[list[dict], operator.add]
     rounds: int
 
 
@@ -61,13 +71,44 @@ def preview(result: str) -> str:
     return result[:RESULT_PREVIEW_CHARS] + "…"
 
 
+def number_sources(found: list[SourceChunk], offset: int) -> list[dict]:
+    return [
+        {"id": offset + position, "filename": chunk.filename, "content": chunk.content}
+        for position, chunk in enumerate(found, start=1)
+    ]
+
+
+def format_sources(sources: list[dict]) -> str:
+    if not sources:
+        return "No matching documents found."
+    return "\n\n---\n\n".join(
+        f"[{source['id']}] {source['filename']}\n{source['content']}"
+        for source in sources
+    )
+
+
 def build_assistant_graph(
     llm: LLMProvider,
     tools: list[Tool],
+    search_documents,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
-    definitions = [to_definition(tool) for tool in tools]
+    definitions = [DOCUMENT_SEARCH_DEFINITION, *(to_definition(tool) for tool in tools)]
     tool_map = {tool.name: tool for tool in tools}
+
+    def run_document_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
+        found = number_sources(search_documents(query), offset)
+        output = format_sources(found)
+        writer(
+            {
+                "type": "tool_result",
+                "name": "search_documents",
+                "content": preview(output),
+            }
+        )
+        if found:
+            writer({"type": "sources", "sources": found})
+        return found, output
 
     def retrieve(state: AssistantState) -> dict:
         writer = get_stream_writer()
@@ -79,15 +120,9 @@ def build_assistant_graph(
                 "arguments": {"query": question},
             }
         )
-        output = tool_map["search_documents"].run(query=question)
-        writer(
-            {
-                "type": "tool_result",
-                "name": "search_documents",
-                "content": preview(output),
-            }
-        )
+        found, output = run_document_search(question, len(state["sources"]), writer)
         return {
+            "sources": found,
             "messages": [
                 {
                     "role": "assistant",
@@ -102,7 +137,7 @@ def build_assistant_graph(
                     ],
                 },
                 {"role": "tool", "tool_name": "search_documents", "content": output},
-            ]
+            ],
         }
 
     def model(state: AssistantState) -> dict:
@@ -127,18 +162,36 @@ def build_assistant_graph(
             if call.name in APPROVAL_TOOLS
         }
         results = []
+        new_sources: list[dict] = []
         for index, call in enumerate(calls):
             if approvals.get(index) is False:
                 output = DECLINED_RESULT
+                writer(
+                    {
+                        "type": "tool_result",
+                        "name": call.name,
+                        "content": preview(output),
+                    }
+                )
+            elif call.name == "search_documents":
+                offset = len(state["sources"]) + len(new_sources)
+                found, output = run_document_search(
+                    str(call.arguments.get("query", "")), offset, writer
+                )
+                new_sources.extend(found)
             else:
                 output = execute_tool(tool_map, call)
-            writer(
-                {"type": "tool_result", "name": call.name, "content": preview(output)}
-            )
+                writer(
+                    {
+                        "type": "tool_result",
+                        "name": call.name,
+                        "content": preview(output),
+                    }
+                )
             results.append(
                 {"role": "tool", "tool_name": call.name, "content": output}
             )
-        return {"messages": results}
+        return {"messages": results, "sources": new_sources}
 
     def next_step(state: AssistantState) -> str:
         wants_tools = bool(state["messages"][-1].get("tool_calls"))
@@ -164,6 +217,7 @@ def initial_state(history: list[dict], question: str) -> AssistantState:
             *history,
             {"role": "user", "content": question},
         ],
+        "sources": [],
         "rounds": 0,
     }
 

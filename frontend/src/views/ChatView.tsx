@@ -11,7 +11,7 @@ import {
   resumeAssistant,
   streamAssistant,
 } from "../api";
-import type { ConversationSummary, ToolStep } from "../types";
+import type { ConversationSummary, Source, ToolStep } from "../types";
 
 interface Attachment {
   name: string;
@@ -30,6 +30,7 @@ interface ChatMessage {
   pending?: boolean;
   attachment?: Attachment;
   steps?: ToolStep[];
+  sources?: Source[];
   approval?: Approval;
 }
 
@@ -169,6 +170,64 @@ function Markdown({ children }: { children: string }) {
   );
 }
 
+function AnswerBody({
+  content,
+  sources,
+}: {
+  content: string;
+  sources?: Source[];
+}) {
+  const [activeSource, setActiveSource] = useState<number | null>(null);
+  const sourceMap = new Map((sources ?? []).map((source) => [source.id, source]));
+  const linked = content.replace(/\[(\d+)\](?!\()/g, (match, id) =>
+    sourceMap.has(Number(id)) ? `[${id}](#source-${id})` : match,
+  );
+  const active = activeSource === null ? null : sourceMap.get(activeSource);
+
+  return (
+    <>
+      <div className="markdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ href, children, ...props }) => {
+              if (href?.startsWith("#source-")) {
+                const id = Number(href.slice("#source-".length));
+                return (
+                  <button
+                    className={activeSource === id ? "citation active" : "citation"}
+                    onClick={() =>
+                      setActiveSource(activeSource === id ? null : id)
+                    }
+                  >
+                    {id}
+                  </button>
+                );
+              }
+              return (
+                <a {...props} href={href} target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              );
+            },
+          }}
+        >
+          {linked}
+        </ReactMarkdown>
+      </div>
+      {active && (
+        <div className="source-card">
+          <div className="source-title">
+            <FileIcon />
+            {active.filename}
+          </div>
+          <div className="source-content">{active.content}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function StepRow({ step }: { step: ToolStep }) {
   const Icon = STEP_ICONS[step.name] ?? WrenchIcon;
   const detail = stepDetail(step);
@@ -263,6 +322,7 @@ export default function ChatView() {
             content: parsed.content,
             attachment: parsed.attachment,
             steps: message.steps ?? undefined,
+            sources: message.sources ?? undefined,
           };
         }),
       );
@@ -325,12 +385,20 @@ export default function ChatView() {
     }));
   }
 
+  function addSources(sources: Source[]) {
+    updateLastMessage((last) => ({
+      ...last,
+      sources: [...(last.sources ?? []), ...sources],
+    }));
+  }
+
   const assistantHandlers = (firstQuestion: string) => ({
     onConversation: (created: number) => adoptConversation(created, firstQuestion),
     onToken: appendAssistantToken,
     onTitle: applyTitle,
     onToolCall: addStep,
     onToolResult: resolveStep,
+    onSources: addSources,
     onApproval: requestApproval,
   });
 
@@ -564,7 +632,7 @@ export default function ChatView() {
                     <span className="dots" aria-hidden="true" />
                   </span>
                 ) : message.role === "assistant" ? (
-                  <Markdown>{message.content}</Markdown>
+                  <AnswerBody content={message.content} sources={message.sources} />
                 ) : (
                   message.content
                 )}

@@ -81,7 +81,10 @@ def get_conversation(
         summary=conversation.summary,
         messages=[
             MessageResponse(
-                role=message.role, content=message.content, steps=message.steps
+                role=message.role,
+                content=message.content,
+                steps=message.steps,
+                sources=message.sources,
             )
             for message in conversation.messages
         ],

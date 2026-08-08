@@ -6,6 +6,7 @@ import type {
   ImageAnswer,
   Job,
   PromptLog,
+  Source,
   Stats,
 } from "./types";
 
@@ -119,6 +120,7 @@ export interface StreamHandlers {
   onTitle: (id: number, title: string) => void;
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   onToolResult?: (name: string, content: string) => void;
+  onSources?: (sources: Source[]) => void;
   onApproval?: (
     name: string,
     args: Record<string, unknown>,
@@ -154,6 +156,7 @@ async function streamEvents(
         handlers.onToolCall?.(event.name, event.arguments);
       else if (event.type === "tool_result")
         handlers.onToolResult?.(event.name, event.content);
+      else if (event.type === "sources") handlers.onSources?.(event.sources);
       else if (event.type === "approval")
         handlers.onApproval?.(event.name, event.arguments, event.thread);
       else if (event.type === "done") return;
