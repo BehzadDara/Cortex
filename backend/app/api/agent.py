@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.agents import run_agent
+from app.agent_graph import run_agent
 from app.api.common import find_or_create_conversation, start_title_generation
 from app.dependencies import (
     get_embedding_provider,
@@ -51,7 +51,6 @@ def agent(
         question = rewrite_question(llm, history, request.question)
 
     result = run_agent(
-        session,
         question,
         embeddings,
         vector_store,

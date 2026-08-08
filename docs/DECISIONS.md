@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-08 — Agent rebuilt on LangGraph, retrieval fan-out parallelized
+
+The hand-rolled planner → retriever → reasoner pipeline was rewritten as a LangGraph `StateGraph`: a `plan` node, a `Send` fan-out that runs one `retrieve` node per search query in parallel, and a `reason` node that deduplicates and synthesizes. LangGraph orchestrates only the control flow — every node still calls our own `LLMProvider`, retrieval funnel, and `WebSearchProvider`; no langchain model wrappers entered the project. Head-to-head on the same questions, answers were equally correct and the graph was faster because retrieval fans out in parallel: coffee-vs-tea 55.9s → 48.4s, World Cup (web fallback) 136.3s → 118.5s. The sequential pipeline is deleted; its dedup moved after the fan-in, since parallel steps can no longer see each other's chunks mid-flight. Side observation: plan phrasing drives relevance-gate hits — "step-by-step coffee brewing methods" scored below the gate against coffee.md while "How coffee is prepared" cleared it, so identical questions can route to web or documents depending on how the 4B model words its plan.
+
 ## 2026-08-06 — Web search fallback needs a relevance gate
 
 Added free web search (ddgs/DuckDuckGo, no API key) behind a `WebSearchProvider` abstraction: a `web_search` tool in chat mode, and a fallback in the agent when documents have nothing. First attempt never triggered — vector search has no concept of "no relevant results"; it always returns the nearest chunks, so findings were never empty. Fix: the cross-encoder already scores every candidate, and irrelevant pairs score below zero, so the agent now filters evidence by rerank score (`agent_min_relevance`, default 0.0) and falls back to the web only when nothing relevant survives. Lesson: "top-k" is not "relevant-k" — thresholds must come from a model that actually measures relevance. Web snippets are shallow evidence; fetching full pages for top results is the known upgrade.
