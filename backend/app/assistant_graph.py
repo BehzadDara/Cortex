@@ -8,6 +8,7 @@ from langgraph.types import interrupt
 
 from app.config import settings
 from app.rag.llm import LLMProvider, ToolCall
+from app.rag.prompts import build_route_prompt
 from app.tools import (
     DOCUMENT_SEARCH_DEFINITION,
     WEB_SEARCH_DEFINITION,
@@ -18,11 +19,13 @@ from app.tools import (
 
 SYSTEM_PROMPT = (
     "You are Cortex, a helpful knowledge assistant. "
-    "The user's documents have already been searched with the raw question; "
-    "the results follow. If they answer the question, answer directly from them. "
-    "If they do not, split the question into sub-topics and run one focused "
-    "search_documents call per sub-topic before anything else. "
-    "Only use web_search when focused document searches also come back empty. "
+    "When document search results appear below, use them: if they answer the "
+    "question, answer directly from them; if they do not, split the question "
+    "into sub-topics and run one focused search_documents call per sub-topic "
+    "before anything else, and only use web_search when those also come back "
+    "empty. "
+    "When no document results appear, the question does not need the user's "
+    "documents: use web_search for live or public information. "
     "Use the calculator for arithmetic and current_time for date or time. "
     "Document passages and web results are labeled with bracketed numbers "
     "like [1]. When a claim in your answer comes from one, cite its number "
@@ -43,6 +46,7 @@ RESULT_PREVIEW_CHARS = 500
 class AssistantState(TypedDict):
     messages: Annotated[list[dict], operator.add]
     sources: Annotated[list[dict], operator.add]
+    needs_documents: bool
     rounds: int
 
 
@@ -97,8 +101,17 @@ def format_sources(sources: list[dict], empty_message: str) -> str:
     return "\n\n---\n\n".join(format_source(source) for source in sources)
 
 
+def decide_route(fast_llm: LLMProvider, question: str) -> bool:
+    try:
+        decision = fast_llm.complete(build_route_prompt(question))
+    except Exception:
+        return True
+    return not decision.strip().lower().startswith("no")
+
+
 def build_assistant_graph(
     llm: LLMProvider,
+    fast_llm: LLMProvider,
     tools: list[Tool],
     search_documents,
     search_web,
@@ -135,6 +148,12 @@ def build_assistant_graph(
         return run_search(
             search_web, "web_search", "No web results found.", query, offset, writer
         )
+
+    def route(state: AssistantState) -> dict:
+        return {"needs_documents": decide_route(fast_llm, state_question(state))}
+
+    def after_route(state: AssistantState) -> str:
+        return "retrieve" if state["needs_documents"] else "model"
 
     def retrieve(state: AssistantState) -> dict:
         writer = get_stream_writer()
@@ -232,10 +251,12 @@ def build_assistant_graph(
         return END
 
     graph = StateGraph(AssistantState)
+    graph.add_node("route", route)
     graph.add_node("retrieve", retrieve)
     graph.add_node("model", model)
     graph.add_node("tools", run_tools)
-    graph.add_edge(START, "retrieve")
+    graph.add_edge(START, "route")
+    graph.add_conditional_edges("route", after_route, ["retrieve", "model"])
     graph.add_edge("retrieve", "model")
     graph.add_conditional_edges("model", next_step, ["tools", END])
     graph.add_edge("tools", "model")
@@ -250,6 +271,7 @@ def initial_state(history: list[dict], question: str) -> AssistantState:
             {"role": "user", "content": question},
         ],
         "sources": [],
+        "needs_documents": True,
         "rounds": 0,
     }
 

@@ -54,12 +54,18 @@ def build_graph(
     reranker: Reranker,
     web_search: WebSearchProvider,
     llm: LLMProvider,
+    fast_llm: LLMProvider,
 ):
     tools = build_tools()
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
     search_web = build_web_search(web_search)
     return build_assistant_graph(
-        llm, tools, search_documents, search_web, checkpointer=get_checkpointer()
+        llm,
+        fast_llm,
+        tools,
+        search_documents,
+        search_web,
+        checkpointer=get_checkpointer(),
     )
 
 
@@ -179,7 +185,9 @@ def assistant(
         start_title_generation(fast_llm, conversation.id, request.question, title_holder)
 
     history = conversation_messages(conversation)
-    graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
+    graph = build_graph(
+        session, embeddings, vector_store, reranker, web_search, llm, fast_llm
+    )
     thread_id = uuid4().hex
     set_active_thread(session, conversation, thread_id)
     return StreamingResponse(
@@ -202,6 +210,7 @@ def continue_run(
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
     llm: LLMProvider = Depends(get_llm_provider),
+    fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
 ) -> StreamingResponse:
@@ -211,7 +220,9 @@ def continue_run(
     if conversation.active_thread is None:
         raise HTTPException(status_code=409, detail="No active run to continue")
 
-    graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
+    graph = build_graph(
+        session, embeddings, vector_store, reranker, web_search, llm, fast_llm
+    )
     thread_id = conversation.active_thread
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
     if not state.values:
@@ -244,13 +255,16 @@ def resume(
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
     llm: LLMProvider = Depends(get_llm_provider),
+    fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
 ) -> StreamingResponse:
     if session.get(Conversation, request.conversation_id) is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
+    graph = build_graph(
+        session, embeddings, vector_store, reranker, web_search, llm, fast_llm
+    )
     return StreamingResponse(
         stream_events(
             graph,
