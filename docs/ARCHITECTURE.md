@@ -29,13 +29,13 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 ## Components
 
-**Backend (FastAPI)** — Exposes the API: document upload, question answering (SSE streaming), and later collections, tools, and agents. Thin route handlers; all logic lives in services.
+**Backend (FastAPI)** — Exposes the API: document upload, collections, the streaming assistant, image questions, jobs, and stats. Thin route handlers; all logic lives in services.
 
 **Ingestion** — Takes a file (or a crawled web page), parses it to text, splits it into chunks, stores chunk + metadata (source, position) in Postgres, embeds each chunk, and stores the vector in Qdrant with the chunk id as payload. Metadata is stored from day one so citations can be added later without re-ingesting. The crawler does a same-domain breadth-first crawl with a page cap, strips HTML boilerplate, and feeds each page through the same pipeline; unchanged pages are skipped by the content hash.
 
 **Retrieval** — A three-stage funnel. Hybrid search: the query is embedded and sent to Qdrant (cosine similarity) while Postgres full-text search (`tsvector`, GIN-indexed) runs alongside; the two rankings are merged with reciprocal rank fusion into top-30 candidates. A cross-encoder (`ms-marco-MiniLM-L-6-v2`) then re-scores each candidate against the question and the top-5 survive. `HYBRID_SEARCH=false` and `RERANK=false` switch the stages off individually.
 
-**LLM Service** — Builds the prompt from retrieved context and streams the answer.
+**LLM Service** — Talks to Ollama through the `LLMProvider` abstraction: streaming chat with tool definitions for the assistant, plain completions for titles and summaries. qwen3:4b (thinking enabled, reasoning discarded) answers; gemma3:4b handles titles and vision.
 
 **Conversation memory** — `/assistant` accepts a `conversation_id` (a new conversation is created and streamed back otherwise). The model sees the conversation summary plus the most recent messages; older messages are folded into the summary incrementally after each exchange. Follow-ups need no query rewriting: if the seeded search misses, the model issues its own better-phrased searches with the history in view.
 
@@ -75,6 +75,7 @@ Prerequisites: Docker, Python 3.12+, [Ollama](https://ollama.com).
 
 ```bash
 ollama pull qwen3:4b
+ollama pull gemma3:4b
 ollama pull nomic-embed-text
 
 docker compose -f docker/docker-compose.yml up -d
@@ -83,10 +84,10 @@ cd backend
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/alembic upgrade head
-.venv/bin/uvicorn app.main:app --reload
+.venv/bin/uvicorn app.main:app --port 8100 --reload
 ```
 
-The API is then available at `http://localhost:8100` (start uvicorn with `--port 8100`) with interactive docs at `http://localhost:8100/docs`. `GET /health` reports the status of Postgres, Qdrant, and Ollama.
+The API is then available at `http://localhost:8100` with interactive docs at `http://localhost:8100/docs`. `GET /health` reports the status of Postgres, Qdrant, and Ollama.
 
 For the frontend:
 

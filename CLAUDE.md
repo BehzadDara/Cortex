@@ -14,10 +14,10 @@ Local-first AI knowledge assistant. A learning project that starts as minimal RA
 ## Structure
 
 - `backend/` — FastAPI application (Python)
-- `frontend/` — React + Vite (later phases)
+- `frontend/` — React + Vite
 - `docker/` — compose files
 - `docs/` — plan and architecture
 
 ## Stack
 
-Python + FastAPI, PostgreSQL for relational data, Qdrant for vectors, Ollama (Qwen3 4B, nomic-embed-text), React + Vite later. Redis and MinIO are deliberately absent until a feature needs them.
+Python + FastAPI, PostgreSQL for relational data, Qdrant for vectors, Ollama (qwen3:4b for answers, gemma3:4b for titles and vision, nomic-embed-text for embeddings), LangGraph for assistant orchestration only, React + Vite for the frontend. Redis and MinIO are deliberately absent until a feature needs them.
