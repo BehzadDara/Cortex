@@ -8,6 +8,7 @@ import type {
   PromptLog,
   Source,
   Stats,
+  ToolStep,
 } from "./types";
 
 const BASE = "/api";
@@ -121,6 +122,7 @@ export interface StreamHandlers {
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   onToolResult?: (name: string, content: string) => void;
   onSources?: (sources: Source[]) => void;
+  onSnapshot?: (question: string, steps: ToolStep[], sources: Source[]) => void;
   onApproval?: (
     name: string,
     args: Record<string, unknown>,
@@ -157,6 +159,8 @@ async function streamEvents(
       else if (event.type === "tool_result")
         handlers.onToolResult?.(event.name, event.content);
       else if (event.type === "sources") handlers.onSources?.(event.sources);
+      else if (event.type === "snapshot")
+        handlers.onSnapshot?.(event.question, event.steps, event.sources);
       else if (event.type === "approval")
         handlers.onApproval?.(event.name, event.arguments, event.thread);
       else if (event.type === "done") return;
@@ -184,5 +188,15 @@ export const resumeAssistant = (
   streamEvents(
     "/assistant/resume",
     { thread, conversation_id: conversationId, approved },
+    handlers,
+  );
+
+export const continueAssistant = (
+  conversationId: number,
+  handlers: StreamHandlers,
+) =>
+  streamEvents(
+    "/assistant/continue",
+    { conversation_id: conversationId },
     handlers,
   );

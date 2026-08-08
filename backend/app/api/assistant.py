@@ -39,7 +39,7 @@ from app.rag.llm import LLMProvider
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 from app.rag.web_search import WebSearchProvider
-from app.schemas import AskRequest, ResumeRequest
+from app.schemas import AskRequest, ContinueRequest, ResumeRequest
 from app.tools import build_document_search, build_tools
 
 router = APIRouter(tags=["assistant"])
@@ -75,6 +75,21 @@ def format_transcript(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def set_active_thread(
+    session: Session, conversation: Conversation, thread_id: str
+) -> None:
+    conversation.active_thread = thread_id
+    session.commit()
+
+
+def clear_active_thread(conversation_id: int) -> None:
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        if conversation is not None:
+            conversation.active_thread = None
+            session.commit()
+
+
 def save_prompt_log(question: str, prompt: str, response: str, started: float) -> None:
     latency_ms = int((time.perf_counter() - started) * 1000)
     with SessionLocal() as session:
@@ -97,8 +112,11 @@ def stream_events(
     conversation_id: int,
     holder: dict | None,
     llm: LLMProvider,
+    snapshot: dict | None = None,
 ) -> Iterator[str]:
     yield sse_event({"type": "conversation", "id": conversation_id})
+    if snapshot is not None:
+        yield sse_event({"type": "snapshot", **snapshot})
 
     started = time.perf_counter()
     config = {"configurable": {"thread_id": thread_id}}
@@ -138,6 +156,7 @@ def stream_events(
             steps=extract_steps(final_state["messages"]),
             sources=final_state.get("sources"),
         )
+        clear_active_thread(conversation_id)
 
 
 @router.post("/assistant")
@@ -160,14 +179,58 @@ def assistant(
 
     history = conversation_messages(conversation)
     graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
+    thread_id = uuid4().hex
+    set_active_thread(session, conversation, thread_id)
     return StreamingResponse(
         stream_events(
             graph,
             initial_state(history, request.question),
-            uuid4().hex,
+            thread_id,
             conversation.id,
             title_holder if is_new else None,
             llm,
+        ),
+        media_type="text/event-stream",
+    )
+
+
+@router.post("/assistant/continue")
+def continue_run(
+    request: ContinueRequest,
+    session: Session = Depends(get_session),
+    embeddings: EmbeddingProvider = Depends(get_embedding_provider),
+    vector_store: VectorStore = Depends(get_vector_store),
+    llm: LLMProvider = Depends(get_llm_provider),
+    reranker: Reranker = Depends(get_reranker),
+    web_search: WebSearchProvider = Depends(get_web_search),
+) -> StreamingResponse:
+    conversation = session.get(Conversation, request.conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if conversation.active_thread is None:
+        raise HTTPException(status_code=409, detail="No active run to continue")
+
+    graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
+    thread_id = conversation.active_thread
+    state = graph.get_state({"configurable": {"thread_id": thread_id}})
+    if not state.values:
+        clear_active_thread(conversation.id)
+        raise HTTPException(status_code=409, detail="No active run to continue")
+
+    snapshot = {
+        "question": state_question(state.values),
+        "steps": extract_steps(state.values["messages"]),
+        "sources": state.values.get("sources") or [],
+    }
+    return StreamingResponse(
+        stream_events(
+            graph,
+            None,
+            thread_id,
+            conversation.id,
+            None,
+            llm,
+            snapshot=snapshot,
         ),
         media_type="text/event-stream",
     )

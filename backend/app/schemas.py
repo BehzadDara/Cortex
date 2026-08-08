@@ -64,6 +64,10 @@ class ResumeRequest(BaseModel):
     approved: bool
 
 
+class ContinueRequest(BaseModel):
+    conversation_id: int
+
+
 class ImageAskResponse(BaseModel):
     conversation_id: int
     answer: str
@@ -124,4 +128,5 @@ class ConversationRename(BaseModel):
 class ConversationResponse(BaseModel):
     id: int
     summary: str | None
+    active_thread: str | None
     messages: list[MessageResponse]

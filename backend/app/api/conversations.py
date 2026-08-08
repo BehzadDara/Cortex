@@ -79,6 +79,7 @@ def get_conversation(
     return ConversationResponse(
         id=conversation.id,
         summary=conversation.summary,
+        active_thread=conversation.active_thread,
         messages=[
             MessageResponse(
                 role=message.role,

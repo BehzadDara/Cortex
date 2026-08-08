@@ -35,6 +35,7 @@ export interface Source {
 export interface ConversationDetail {
   id: number;
   summary: string | null;
+  active_thread: string | null;
   messages: {
     role: string;
     content: string;

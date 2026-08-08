@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import {
   askImage,
+  continueAssistant,
   deleteConversation,
   getConversation,
   getConversations,
@@ -326,8 +327,43 @@ export default function ChatView() {
           };
         }),
       );
+      if (conversation.active_thread) {
+        continueRun(target);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function continueRun(target: number) {
+    setBusy(true);
+    try {
+      await continueAssistant(target, {
+        ...assistantHandlers(""),
+        onConversation: () => {},
+        onSnapshot: (question, steps, sources) => {
+          awaitingApproval.current = false;
+          setMessages((current) => [
+            ...current,
+            { role: "user", content: question },
+            {
+              role: "assistant",
+              content: PENDING_LABEL,
+              pending: true,
+              steps,
+              sources,
+            },
+          ]);
+        },
+      });
+      refreshConversations();
+    } catch (caught) {
+      setMessages((current) =>
+        current[current.length - 1]?.pending ? current.slice(0, -1) : current,
+      );
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (!awaitingApproval.current) setBusy(false);
     }
   }
 
