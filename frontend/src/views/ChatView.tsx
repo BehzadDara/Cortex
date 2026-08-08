@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
+import ReactMarkdown from "react-markdown";
 import { useNavigate, useParams } from "react-router-dom";
+import remarkGfm from "remark-gfm";
 import {
   askImage,
   deleteConversation,
@@ -150,6 +152,14 @@ const STEP_ICONS: Record<string, ComponentType> = {
   current_time: ClockIcon,
 };
 
+function Markdown({ children }: { children: string }) {
+  return (
+    <div className="markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+    </div>
+  );
+}
+
 function StepRow({ step }: { step: ToolStep }) {
   const Icon = STEP_ICONS[step.name] ?? WrenchIcon;
   const detail = stepDetail(step);
@@ -163,7 +173,11 @@ function StepRow({ step }: { step: ToolStep }) {
         {detail && <span className="step-detail">{detail}</span>}
         {running && <span className="dots" aria-hidden="true" />}
       </summary>
-      {step.result && <div className="step-result">{step.result}</div>}
+      {step.result && (
+        <div className="step-result">
+          <Markdown>{step.result}</Markdown>
+        </div>
+      )}
     </details>
   );
 }
@@ -540,6 +554,8 @@ export default function ChatView() {
                     {message.content}
                     <span className="dots" aria-hidden="true" />
                   </span>
+                ) : message.role === "assistant" ? (
+                  <Markdown>{message.content}</Markdown>
                 ) : (
                   message.content
                 )}
