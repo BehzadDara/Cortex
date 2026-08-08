@@ -3,17 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   askImage,
   deleteConversation,
-  getCollections,
   getConversation,
   getConversations,
   renameConversation,
   resumeAssistant,
-  streamAsk,
   streamAssistant,
 } from "../api";
-import type { Collection, ConversationSummary, ToolStep } from "../types";
-
-type Mode = "ask" | "assistant";
+import type { ConversationSummary, ToolStep } from "../types";
 
 interface Attachment {
   name: string;
@@ -44,16 +40,10 @@ function parseStoredContent(content: string): {
   return { content: match[1], attachment: { name: match[2] } };
 }
 
-const MODE_HINTS: Record<Mode, string> = {
-  ask: "Answers come from your indexed documents, with conversation memory.",
-  assistant:
-    "The model works with tools — document search, web search, calculator — and shows each step.",
-};
+const EMPTY_HINT =
+  "Your documents are searched first, then the model works with tools — more searches, web, calculator — and shows each step.";
 
-const PENDING_LABELS: Record<Mode, string> = {
-  ask: "Thinking",
-  assistant: "Working",
-};
+const PENDING_LABEL = "Working";
 
 const STEP_LABELS: Record<string, { running: string; done: string }> = {
   search_documents: { running: "Searching documents", done: "Searched documents" },
@@ -200,9 +190,6 @@ export default function ChatView() {
   const routeId = id ? Number(id) : null;
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState<Mode>("ask");
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [collectionId, setCollectionId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -220,7 +207,6 @@ export default function ChatView() {
   }
 
   useEffect(() => {
-    getCollections().then(setCollections).catch(() => {});
     refreshConversations();
   }, []);
 
@@ -290,7 +276,7 @@ export default function ChatView() {
     updateLastMessage((last) => ({
       ...last,
       steps: [...(last.steps ?? []), { name, arguments: args, result: null }],
-      content: PENDING_LABELS.assistant,
+      content: PENDING_LABEL,
       pending: true,
     }));
   }
@@ -331,7 +317,7 @@ export default function ChatView() {
     updateLastMessage((last) => ({
       ...last,
       approval: undefined,
-      content: PENDING_LABELS.assistant,
+      content: PENDING_LABEL,
       pending: true,
     }));
     try {
@@ -339,7 +325,6 @@ export default function ChatView() {
         approval.thread,
         conversationId,
         approved,
-        collectionId,
         assistantHandlers(""),
       );
       refreshConversations();
@@ -416,7 +401,7 @@ export default function ChatView() {
       },
       {
         role: "assistant",
-        content: image ? "Reading the image" : PENDING_LABELS[mode],
+        content: image ? "Reading the image" : PENDING_LABEL,
         pending: true,
       },
     ]);
@@ -426,20 +411,8 @@ export default function ChatView() {
         const result = await askImage(image, trimmed, existingId);
         replaceLastMessage({ role: "assistant", content: result.answer });
         adoptConversation(result.conversation_id, trimmed);
-      } else if (mode === "ask") {
-        await streamAsk(trimmed, collectionId, existingId, {
-          onConversation: (created) => adoptConversation(created, trimmed),
-          onToken: appendAssistantToken,
-          onTitle: applyTitle,
-        });
-        refreshConversations();
       } else {
-        await streamAssistant(
-          trimmed,
-          collectionId,
-          existingId,
-          assistantHandlers(trimmed),
-        );
+        await streamAssistant(trimmed, existingId, assistantHandlers(trimmed));
         refreshConversations();
       }
     } catch (caught) {
@@ -515,40 +488,12 @@ export default function ChatView() {
       </aside>
 
       <section className="chat-main">
-        <div className="chat-toolbar">
-          <div className="mode-switch">
-            {(["ask", "assistant"] as Mode[]).map((name) => (
-              <button
-                key={name}
-                className={mode === name ? "active" : ""}
-                onClick={() => setMode(name)}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-          <select
-            aria-label="Collection filter"
-            value={collectionId ?? ""}
-            onChange={(event) =>
-              setCollectionId(event.target.value ? Number(event.target.value) : null)
-            }
-          >
-            <option value="">All collections</option>
-            {collections.map((collection) => (
-              <option key={collection.id} value={collection.id}>
-                {collection.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="chat-messages">
           <div className="chat-messages-inner">
             {messages.length === 0 && (
               <div className="chat-empty">
                 <h3>Ask your knowledge base</h3>
-                <p className="hint">{MODE_HINTS[mode]}</p>
+                <p className="hint">{EMPTY_HINT}</p>
               </div>
             )}
             {messages.map((message, index) => (

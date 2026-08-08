@@ -15,15 +15,6 @@ Message: {question}
 
 Title:"""
 
-REWRITE_PROMPT = """Rewrite the follow-up question into a self-contained question that can be understood without the conversation. Keep it short. Output only the rewritten question.
-
-Conversation:
-{history}
-
-Follow-up question: {question}
-
-Standalone question:"""
-
 SUMMARY_PROMPT = """Summarize the conversation below concisely. Keep facts, names, numbers, and user preferences. Output only the summary.
 
 {previous_section}Conversation:
@@ -34,32 +25,8 @@ Summary:"""
 
 TRANSCRIBE_PROMPT = """Transcribe all text visible in this image exactly. If the image contains diagrams, charts, or figures, describe each one briefly after the transcription. Output only the transcription and descriptions."""
 
-PLAN_PROMPT = """Break the question into at most {max_steps} short search queries that together gather the evidence needed to answer it. Each query must be self-contained and searchable on its own. Output one query per line, nothing else.
-
-Question: {question}
-
-Search queries:"""
-
-SYNTHESIZE_PROMPT = """You are Cortex, a knowledge assistant. Answer the question using only the evidence gathered below. If the evidence is not enough, say you don't know. Answer directly and concisely.
-
-Question: {question}
-
-Evidence:
-{evidence}
-
-Answer:"""
-
-
 def build_title_prompt(question: str) -> str:
     return TITLE_PROMPT.format(question=question)
-
-
-def build_plan_prompt(question: str, max_steps: int) -> str:
-    return PLAN_PROMPT.format(question=question, max_steps=max_steps)
-
-
-def build_synthesize_prompt(question: str, evidence: str) -> str:
-    return SYNTHESIZE_PROMPT.format(question=question, evidence=evidence)
 
 
 def build_answer_prompt(
@@ -70,10 +37,6 @@ def build_answer_prompt(
     return ANSWER_PROMPT.format(
         history_section=history_section, context=context, question=question
     )
-
-
-def build_rewrite_prompt(history: str, question: str) -> str:
-    return REWRITE_PROMPT.format(history=history, question=question)
 
 
 def build_summary_prompt(previous: str | None, transcript: str) -> str:

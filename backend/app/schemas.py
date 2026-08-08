@@ -55,7 +55,6 @@ def to_job_response(job) -> JobResponse:
 
 class AskRequest(BaseModel):
     question: str
-    collection_id: int | None = None
     conversation_id: int | None = None
 
 
@@ -63,7 +62,6 @@ class ResumeRequest(BaseModel):
     thread: str
     conversation_id: int
     approved: bool
-    collection_id: int | None = None
 
 
 class ImageAskResponse(BaseModel):

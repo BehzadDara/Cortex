@@ -1,3 +1,4 @@
+import time
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -20,6 +21,8 @@ from app.assistant_graph import (
     state_question,
 )
 from app.checkpoints import get_checkpointer
+from app.config import settings
+from app.database import SessionLocal
 from app.dependencies import (
     get_embedding_provider,
     get_fast_llm_provider,
@@ -29,7 +32,7 @@ from app.dependencies import (
     get_vector_store,
     get_web_search,
 )
-from app.models import Conversation
+from app.models import Conversation, PromptLog
 from app.rag.conversation import conversation_messages, save_exchange
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
@@ -41,6 +44,8 @@ from app.tools import build_tools
 
 router = APIRouter(tags=["assistant"])
 
+TRANSCRIPT_MESSAGE_CHARS = 500
+
 
 def build_graph(
     session: Session,
@@ -49,17 +54,37 @@ def build_graph(
     reranker: Reranker,
     web_search: WebSearchProvider,
     llm: LLMProvider,
-    collection_id: int | None,
 ):
-    tools = build_tools(
-        session,
-        embeddings,
-        vector_store,
-        reranker,
-        web_search,
-        collection_id=collection_id,
-    )
+    tools = build_tools(session, embeddings, vector_store, reranker, web_search)
     return build_assistant_graph(llm, tools, checkpointer=get_checkpointer())
+
+
+def format_transcript(messages: list[dict]) -> str:
+    lines = []
+    for message in messages:
+        line = f"{message.get('role')}: {(message.get('content') or '')[:TRANSCRIPT_MESSAGE_CHARS]}"
+        tool_names = ", ".join(
+            call["function"]["name"] for call in message.get("tool_calls") or []
+        )
+        if tool_names:
+            line += f" [tools: {tool_names}]"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def save_prompt_log(question: str, prompt: str, response: str, started: float) -> None:
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    with SessionLocal() as session:
+        session.add(
+            PromptLog(
+                question=question,
+                prompt=prompt,
+                response=response,
+                model=settings.llm_model,
+                latency_ms=latency_ms,
+            )
+        )
+        session.commit()
 
 
 def stream_events(
@@ -72,6 +97,7 @@ def stream_events(
 ) -> Iterator[str]:
     yield sse_event({"type": "conversation", "id": conversation_id})
 
+    started = time.perf_counter()
     config = {"configurable": {"thread_id": thread_id}}
     final_state = None
     stream = graph.stream(
@@ -96,10 +122,15 @@ def stream_events(
     yield sse_event({"type": "done"})
 
     if final_state is not None:
+        question = state_question(final_state)
+        answer = final_answer(final_state)
+        save_prompt_log(
+            question, format_transcript(final_state["messages"]), answer, started
+        )
         save_exchange(
             conversation_id,
-            state_question(final_state),
-            final_answer(final_state),
+            question,
+            answer,
             llm,
             steps=extract_steps(final_state["messages"]),
         )
@@ -124,10 +155,7 @@ def assistant(
         start_title_generation(fast_llm, conversation.id, request.question, title_holder)
 
     history = conversation_messages(conversation)
-    graph = build_graph(
-        session, embeddings, vector_store, reranker, web_search, llm,
-        request.collection_id,
-    )
+    graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
     return StreamingResponse(
         stream_events(
             graph,
@@ -154,10 +182,7 @@ def resume(
     if session.get(Conversation, request.conversation_id) is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    graph = build_graph(
-        session, embeddings, vector_store, reranker, web_search, llm,
-        request.collection_id,
-    )
+    graph = build_graph(session, embeddings, vector_store, reranker, web_search, llm)
     return StreamingResponse(
         stream_events(
             graph,

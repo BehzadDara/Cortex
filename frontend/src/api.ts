@@ -161,35 +161,14 @@ async function streamEvents(
   }
 }
 
-export const streamAsk = (
-  question: string,
-  collectionId: number | null,
-  conversationId: number | null,
-  handlers: StreamHandlers,
-) =>
-  streamEvents(
-    "/ask",
-    {
-      question,
-      collection_id: collectionId,
-      conversation_id: conversationId,
-    },
-    handlers,
-  );
-
 export const streamAssistant = (
   question: string,
-  collectionId: number | null,
   conversationId: number | null,
   handlers: StreamHandlers,
 ) =>
   streamEvents(
     "/assistant",
-    {
-      question,
-      collection_id: collectionId,
-      conversation_id: conversationId,
-    },
+    { question, conversation_id: conversationId },
     handlers,
   );
 
@@ -197,16 +176,10 @@ export const resumeAssistant = (
   thread: string,
   conversationId: number,
   approved: boolean,
-  collectionId: number | null,
   handlers: StreamHandlers,
 ) =>
   streamEvents(
     "/assistant/resume",
-    {
-      thread,
-      conversation_id: conversationId,
-      approved,
-      collection_id: collectionId,
-    },
+    { thread, conversation_id: conversationId, approved },
     handlers,
   );

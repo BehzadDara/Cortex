@@ -19,7 +19,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **13. OCR & multimodal** — Images and scanned PDFs OCR'd by a local vision model (gemma3:4b); `/ask-image` for direct visual questions.
 - [x] **14. Dashboard** — Indexed documents, latency, token usage — built on the logs kept since step 3. Ships with the full React frontend: chat (ask/chat/agent modes with streaming), documents, collections, dashboard.
 - [x] **15. Production hardening** — Background jobs for crawl/repository indexing with status polling. API key auth and rate limiting were built, then removed for the single-user local setup; they return with deployment or multi-user support.
-- [x] **16. LangGraph orchestration** — Agent rebuilt as a `StateGraph` with parallel retrieval fan-out, measured against the hand-rolled pipeline, then Chat + Agent merged into one streaming `/assistant` (model ⇄ tools cycle with live tool-step events). Postgres checkpointing makes runs resumable; `interrupt()` adds human-in-the-loop approval for web searches.
+- [x] **16. LangGraph orchestration** — Agent rebuilt as a `StateGraph` with parallel retrieval fan-out, measured against the hand-rolled pipeline, then Chat + Agent merged into one streaming `/assistant` (model ⇄ tools cycle with live tool-step events). Postgres checkpointing makes runs resumable; `interrupt()` adds human-in-the-loop approval for web searches. Finally Ask folded in too: an always-first `retrieve` node seeds the loop with grounded context, leaving a single conversation surface; the chat collection filter was removed with it.
 
 ## Principles
 

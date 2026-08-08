@@ -4,23 +4,11 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import Conversation, Message
 from app.rag.llm import LLMProvider
-from app.rag.prompts import (
-    build_rewrite_prompt,
-    build_summary_prompt,
-    build_title_prompt,
-)
+from app.rag.prompts import build_summary_prompt, build_title_prompt
 
 
 def recent_messages(conversation: Conversation) -> list[Message]:
     return conversation.messages[-settings.memory_recent_messages :]
-
-
-def format_history(conversation: Conversation, messages: list[Message]) -> str:
-    parts = []
-    if conversation.summary:
-        parts.append(f"Summary of earlier conversation:\n{conversation.summary}")
-    parts.extend(f"{message.role}: {message.content}" for message in messages)
-    return "\n".join(parts)
 
 
 def placeholder_title(question: str) -> str:
@@ -83,11 +71,6 @@ def save_exchange(
         )
         session.commit()
         maybe_summarize(session, llm, conversation)
-
-
-def rewrite_question(llm: LLMProvider, history: str, question: str) -> str:
-    rewritten = llm.complete(build_rewrite_prompt(history, question))
-    return rewritten or question
 
 
 def maybe_summarize(

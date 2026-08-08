@@ -12,10 +12,11 @@ from app.tools import Tool, to_definition
 
 SYSTEM_PROMPT = (
     "You are Cortex, a helpful knowledge assistant. "
-    "Use search_documents to answer questions about the user's documents. "
-    "Break complex questions into several focused search_documents calls, "
-    "one per sub-topic. "
-    "If the documents contain nothing relevant, use web_search. "
+    "The user's documents have already been searched with the raw question; "
+    "the results follow. If they answer the question, answer directly from them. "
+    "If they do not, split the question into sub-topics and run one focused "
+    "search_documents call per sub-topic before anything else. "
+    "Only use web_search when focused document searches also come back empty. "
     "Use the calculator for arithmetic and current_time for date or time. "
     "Once you have the evidence, answer directly and concisely from it."
 )
@@ -68,6 +69,42 @@ def build_assistant_graph(
     definitions = [to_definition(tool) for tool in tools]
     tool_map = {tool.name: tool for tool in tools}
 
+    def retrieve(state: AssistantState) -> dict:
+        writer = get_stream_writer()
+        question = state_question(state)
+        writer(
+            {
+                "type": "tool_call",
+                "name": "search_documents",
+                "arguments": {"query": question},
+            }
+        )
+        output = tool_map["search_documents"].run(query=question)
+        writer(
+            {
+                "type": "tool_result",
+                "name": "search_documents",
+                "content": preview(output),
+            }
+        )
+        return {
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "name": "search_documents",
+                                "arguments": {"query": question},
+                            }
+                        }
+                    ],
+                },
+                {"role": "tool", "tool_name": "search_documents", "content": output},
+            ]
+        }
+
     def model(state: AssistantState) -> dict:
         writer = get_stream_writer()
         reply = llm.chat_stream(
@@ -110,9 +147,11 @@ def build_assistant_graph(
         return END
 
     graph = StateGraph(AssistantState)
+    graph.add_node("retrieve", retrieve)
     graph.add_node("model", model)
     graph.add_node("tools", run_tools)
-    graph.add_edge(START, "model")
+    graph.add_edge(START, "retrieve")
+    graph.add_edge("retrieve", "model")
     graph.add_conditional_edges("model", next_step, ["tools", END])
     graph.add_edge("tools", "model")
     return graph.compile(checkpointer=checkpointer)

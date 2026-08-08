@@ -71,7 +71,6 @@ def build_tools(
     vector_store: VectorStore,
     reranker: Reranker,
     web_search: WebSearchProvider,
-    collection_id: int | None = None,
 ) -> list[Tool]:
     def search_documents(query: str) -> str:
         chunks = retrieve_chunks(
@@ -80,7 +79,6 @@ def build_tools(
             settings.top_k,
             embeddings,
             vector_store,
-            collection_id=collection_id,
             reranker=reranker,
             min_score=settings.agent_min_relevance,
         )

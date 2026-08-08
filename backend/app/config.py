@@ -29,8 +29,6 @@ class Settings(BaseSettings):
     memory_summary_threshold: int = 4
     chat_max_rounds: int = 5
     llm_num_ctx: int = 16384
-    agent_max_steps: int = 4
-    agent_top_k: int = 3
     agent_min_relevance: float = 0.0
     web_search_results: int = 5
 

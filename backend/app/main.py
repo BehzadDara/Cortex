@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api import (
-    ask,
     assistant,
     collections,
     conversations,
@@ -29,7 +28,6 @@ app = FastAPI(title="Cortex", lifespan=lifespan)
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)
-app.include_router(ask.router)
 app.include_router(assistant.router)
 app.include_router(vision.router)
 app.include_router(stats.router)

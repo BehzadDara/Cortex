@@ -37,13 +37,13 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **LLM Service** — Builds the prompt from retrieved context and streams the answer.
 
-**Conversation memory** — `/ask` accepts a `conversation_id` (a new one is created and returned in the `X-Conversation-Id` header otherwise). Follow-up questions are rewritten into standalone questions by the LLM before retrieval. The answer prompt carries the conversation summary plus the most recent messages; older messages are folded into the summary incrementally after each exchange.
+**Conversation memory** — `/assistant` accepts a `conversation_id` (a new conversation is created and streamed back otherwise). The model sees the conversation summary plus the most recent messages; older messages are folded into the summary incrementally after each exchange. Follow-ups need no query rewriting: if the seeded search misses, the model issues its own better-phrased searches with the history in view.
 
-**Assistant** — `/assistant` is the agentic endpoint: a LangGraph two-node cycle (`model ⇄ tools`) where the model receives tool definitions (`search_documents`, `web_search`, `calculator`, `current_time`) and orchestrates itself — decomposing complex questions into several searches, falling back to the web when the relevance-gated document search returns nothing. Every step streams over SSE as typed events (`tool_call`, `tool_result`, `token`, `title`, `done`), and executed steps persist as JSONB on the assistant message so old chats replay their trace. LangGraph handles only control flow; nodes call the project's own provider abstractions. State checkpoints to Postgres after every node under a per-request thread id, which enables human-in-the-loop approval: before a `web_search` executes, the graph pauses via `interrupt()`, the stream emits an `approval` event and ends, and `POST /assistant/resume` continues the run from the checkpoint with the user's decision. `/ask` remains the fixed RAG pipeline.
+**Assistant** — `/assistant` is the single answering endpoint: a LangGraph graph (`retrieve → model ⇄ tools`). The `retrieve` node always runs the retrieval funnel with the raw question first — guaranteed grounding, streamed as a normal search step — then the model orchestrates itself with tool definitions (`search_documents`, `web_search`, `calculator`, `current_time`): answering directly when the seeded search suffices, decomposing into focused searches when it doesn't, and reaching for the web only when the relevance-gated document searches come back empty. Every step streams over SSE as typed events (`tool_call`, `tool_result`, `token`, `title`, `done`), and executed steps persist as JSONB on the assistant message so old chats replay their trace. LangGraph handles only control flow; nodes call the project's own provider abstractions. State checkpoints to Postgres after every node under a per-request thread id, which enables human-in-the-loop approval: before a `web_search` executes, the graph pauses via `interrupt()`, the stream emits an `approval` event and ends, and `POST /assistant/resume` continues the run from the checkpoint with the user's decision.
 
 **Vision** — Images (`.png`, `.jpg`) are parsed by a local vision model that transcribes text and describes figures; the transcription then flows through the normal chunk → embed → index pipeline. PDFs without a text layer (scans) are rendered page by page and OCR'd the same way, capped at `ocr_max_pages`. `/ask-image` answers a question about an uploaded image directly, without indexing it.
 
-Two earlier endpoints — `/chat` (a hand-rolled tool loop) and `/agent` (a hardcoded planner → retriever → reasoner pipeline, later rebuilt as a LangGraph fan-out graph) — were measured against the assistant and retired; DECISIONS.md records the comparison. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
+Three earlier endpoints — `/ask` (the fixed RAG pipeline), `/chat` (a hand-rolled tool loop), and `/agent` (a hardcoded planner → retriever → reasoner pipeline, later rebuilt as a LangGraph fan-out graph) — were folded into the assistant and retired; DECISIONS.md records the comparisons. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
 
 **Storage** — PostgreSQL is the source of truth: documents, chunks, logs, and later collections and users. Schema is managed with Alembic. Qdrant stores one vector per chunk; keeping the two in sync is the ingestion service's responsibility.
 
@@ -67,7 +67,7 @@ LangGraph sits outside this table on purpose: it orchestrates control flow (the 
 
 **Ingestion:** upload → parse → chunk → embed → store.
 
-**Query:** question → embed → similarity search → top-k chunks → prompt with context → LLM → streamed answer.
+**Query:** question → retrieval funnel (hybrid search → rerank → relevance gate) seeded as the first tool step → model answers or loops with more tools → streamed answer with the full step trace.
 
 ## How to run
 
@@ -96,7 +96,7 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (ask and assistant modes, with live tool-step cards and web-search approval prompts), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
+The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (one assistant conversation surface, with live tool-step cards and web-search approval prompts), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
 
 ## Background jobs
 
@@ -114,4 +114,4 @@ cd backend
 .venv/bin/python -m evals.run --retrieval-only # fast, no LLM
 ```
 
-Every `/ask` request is logged to the `prompt_logs` table with question, full prompt, response, model, and latency.
+Every `/assistant` exchange is logged to the `prompt_logs` table with question, a transcript of the tool steps, response, model, and latency.
