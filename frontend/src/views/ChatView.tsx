@@ -7,6 +7,7 @@ import {
   getConversation,
   getConversations,
   renameConversation,
+  resumeAssistant,
   streamAsk,
   streamAssistant,
 } from "../api";
@@ -19,12 +20,19 @@ interface Attachment {
   url?: string;
 }
 
+interface Approval {
+  name: string;
+  arguments: Record<string, unknown>;
+  thread: string;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
   attachment?: Attachment;
   steps?: ToolStep[];
+  approval?: Approval;
 }
 
 function parseStoredContent(content: string): {
@@ -205,6 +213,7 @@ export default function ChatView() {
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const awaitingApproval = useRef(false);
 
   function refreshConversations() {
     getConversations().then(setConversations).catch(() => {});
@@ -299,6 +308,51 @@ export default function ChatView() {
     });
   }
 
+  function requestApproval(name: string, args: Record<string, unknown>, thread: string) {
+    awaitingApproval.current = true;
+    updateLastMessage((last) => ({
+      ...last,
+      approval: { name, arguments: args, thread },
+    }));
+  }
+
+  const assistantHandlers = (firstQuestion: string) => ({
+    onConversation: (created: number) => adoptConversation(created, firstQuestion),
+    onToken: appendAssistantToken,
+    onTitle: applyTitle,
+    onToolCall: addStep,
+    onToolResult: resolveStep,
+    onApproval: requestApproval,
+  });
+
+  async function decideApproval(approval: Approval, approved: boolean) {
+    if (conversationId === null) return;
+    awaitingApproval.current = false;
+    updateLastMessage((last) => ({
+      ...last,
+      approval: undefined,
+      content: PENDING_LABELS.assistant,
+      pending: true,
+    }));
+    try {
+      await resumeAssistant(
+        approval.thread,
+        conversationId,
+        approved,
+        collectionId,
+        assistantHandlers(""),
+      );
+      refreshConversations();
+    } catch (caught) {
+      setMessages((current) =>
+        current[current.length - 1]?.pending ? current.slice(0, -1) : current,
+      );
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (!awaitingApproval.current) setBusy(false);
+    }
+  }
+
   function adoptConversation(created: number, firstQuestion: string) {
     setConversationId(created);
     if (conversationId === null) {
@@ -380,13 +434,12 @@ export default function ChatView() {
         });
         refreshConversations();
       } else {
-        await streamAssistant(trimmed, collectionId, existingId, {
-          onConversation: (created) => adoptConversation(created, trimmed),
-          onToken: appendAssistantToken,
-          onTitle: applyTitle,
-          onToolCall: addStep,
-          onToolResult: resolveStep,
-        });
+        await streamAssistant(
+          trimmed,
+          collectionId,
+          existingId,
+          assistantHandlers(trimmed),
+        );
         refreshConversations();
       }
     } catch (caught) {
@@ -395,7 +448,7 @@ export default function ChatView() {
       );
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setBusy(false);
+      if (!awaitingApproval.current) setBusy(false);
     }
   }
 
@@ -511,7 +564,33 @@ export default function ChatView() {
                     ))}
                   </div>
                 )}
-                {message.pending ? (
+                {message.approval ? (
+                  <div className="approval">
+                    <div className="approval-text">
+                      <GlobeIcon />
+                      <span>
+                        Cortex wants to search the web for{" "}
+                        <strong>
+                          {String(message.approval.arguments.query ?? "")}
+                        </strong>
+                      </span>
+                    </div>
+                    <div className="approval-actions">
+                      <button
+                        className="primary"
+                        onClick={() => decideApproval(message.approval!, true)}
+                      >
+                        Allow
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() => decideApproval(message.approval!, false)}
+                      >
+                        Deny
+                      </button>
+                    </div>
+                  </div>
+                ) : message.pending ? (
                   <span className="thinking">
                     {message.content}
                     <span className="dots" aria-hidden="true" />

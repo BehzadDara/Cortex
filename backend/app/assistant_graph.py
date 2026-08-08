@@ -1,8 +1,10 @@
 import operator
 from typing import Annotated, TypedDict
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
 
 from app.config import settings
 from app.rag.llm import LLMProvider, ToolCall
@@ -19,6 +21,10 @@ SYSTEM_PROMPT = (
 )
 
 FALLBACK_ANSWER = "I could not finish answering within the tool call limit."
+
+DECLINED_RESULT = "The user declined the web search."
+
+APPROVAL_TOOLS = {"web_search"}
 
 RESULT_PREVIEW_CHARS = 500
 
@@ -54,7 +60,11 @@ def preview(result: str) -> str:
     return result[:RESULT_PREVIEW_CHARS] + "…"
 
 
-def build_assistant_graph(llm: LLMProvider, tools: list[Tool]):
+def build_assistant_graph(
+    llm: LLMProvider,
+    tools: list[Tool],
+    checkpointer: BaseCheckpointSaver | None = None,
+):
     definitions = [to_definition(tool) for tool in tools]
     tool_map = {tool.name: tool for tool in tools}
 
@@ -73,9 +83,18 @@ def build_assistant_graph(llm: LLMProvider, tools: list[Tool]):
 
     def run_tools(state: AssistantState) -> dict:
         writer = get_stream_writer()
+        calls = parse_tool_calls(state["messages"][-1])
+        approvals = {
+            index: interrupt({"name": call.name, "arguments": call.arguments})
+            for index, call in enumerate(calls)
+            if call.name in APPROVAL_TOOLS
+        }
         results = []
-        for call in parse_tool_calls(state["messages"][-1]):
-            output = execute_tool(tool_map, call)
+        for index, call in enumerate(calls):
+            if approvals.get(index) is False:
+                output = DECLINED_RESULT
+            else:
+                output = execute_tool(tool_map, call)
             writer(
                 {"type": "tool_result", "name": call.name, "content": preview(output)}
             )
@@ -96,7 +115,7 @@ def build_assistant_graph(llm: LLMProvider, tools: list[Tool]):
     graph.add_edge(START, "model")
     graph.add_conditional_edges("model", next_step, ["tools", END])
     graph.add_edge("tools", "model")
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
 def initial_state(history: list[dict], question: str) -> AssistantState:
@@ -115,3 +134,26 @@ def final_answer(state: AssistantState) -> str:
     if last.get("role") == "assistant" and last.get("content"):
         return last["content"]
     return FALLBACK_ANSWER
+
+
+def state_question(state: AssistantState) -> str:
+    return next(
+        message["content"]
+        for message in reversed(state["messages"])
+        if message.get("role") == "user"
+    )
+
+
+def extract_steps(messages: list[dict]) -> list[dict]:
+    steps: list[dict] = []
+    for message in messages:
+        for call in parse_tool_calls(message):
+            steps.append(
+                {"name": call.name, "arguments": call.arguments, "result": None}
+            )
+        if message.get("role") == "tool":
+            for step in steps:
+                if step["name"] == message.get("tool_name") and step["result"] is None:
+                    step["result"] = preview(message["content"])
+                    break
+    return steps

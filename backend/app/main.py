@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import httpx
 from fastapi import FastAPI
 from sqlalchemy import text
@@ -12,10 +14,18 @@ from app.api import (
     stats,
     vision,
 )
+from app.checkpoints import warm_checkpointer
 from app.config import settings
 from app.database import engine
 
-app = FastAPI(title="Cortex")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    warm_checkpointer()
+    yield
+
+
+app = FastAPI(title="Cortex", lifespan=lifespan)
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)

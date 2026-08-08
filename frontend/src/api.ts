@@ -119,6 +119,11 @@ export interface StreamHandlers {
   onTitle: (id: number, title: string) => void;
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   onToolResult?: (name: string, content: string) => void;
+  onApproval?: (
+    name: string,
+    args: Record<string, unknown>,
+    thread: string,
+  ) => void;
 }
 
 async function streamEvents(
@@ -149,6 +154,8 @@ async function streamEvents(
         handlers.onToolCall?.(event.name, event.arguments);
       else if (event.type === "tool_result")
         handlers.onToolResult?.(event.name, event.content);
+      else if (event.type === "approval")
+        handlers.onApproval?.(event.name, event.arguments, event.thread);
       else if (event.type === "done") return;
     }
   }
@@ -182,6 +189,24 @@ export const streamAssistant = (
       question,
       collection_id: collectionId,
       conversation_id: conversationId,
+    },
+    handlers,
+  );
+
+export const resumeAssistant = (
+  thread: string,
+  conversationId: number,
+  approved: boolean,
+  collectionId: number | null,
+  handlers: StreamHandlers,
+) =>
+  streamEvents(
+    "/assistant/resume",
+    {
+      thread,
+      conversation_id: conversationId,
+      approved,
+      collection_id: collectionId,
     },
     handlers,
   );

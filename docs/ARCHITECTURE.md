@@ -39,11 +39,11 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **Conversation memory** — `/ask` accepts a `conversation_id` (a new one is created and returned in the `X-Conversation-Id` header otherwise). Follow-up questions are rewritten into standalone questions by the LLM before retrieval. The answer prompt carries the conversation summary plus the most recent messages; older messages are folded into the summary incrementally after each exchange.
 
-**Tool calling** — `/chat` is the agentic endpoint: the model receives tool definitions (`search_documents`, `calculator`, `current_time`) and decides itself which to call. A bounded loop executes tool calls, feeds results back as `tool` messages, and stops when the model answers in plain text. `/ask` remains the fixed RAG pipeline.
+**Assistant** — `/assistant` is the agentic endpoint: a LangGraph two-node cycle (`model ⇄ tools`) where the model receives tool definitions (`search_documents`, `web_search`, `calculator`, `current_time`) and orchestrates itself — decomposing complex questions into several searches, falling back to the web when the relevance-gated document search returns nothing. Every step streams over SSE as typed events (`tool_call`, `tool_result`, `token`, `title`, `done`), and executed steps persist as JSONB on the assistant message so old chats replay their trace. LangGraph handles only control flow; nodes call the project's own provider abstractions. State checkpoints to Postgres after every node under a per-request thread id, which enables human-in-the-loop approval: before a `web_search` executes, the graph pauses via `interrupt()`, the stream emits an `approval` event and ends, and `POST /assistant/resume` continues the run from the checkpoint with the user's decision. `/ask` remains the fixed RAG pipeline.
 
 **Vision** — Images (`.png`, `.jpg`) are parsed by a local vision model that transcribes text and describes figures; the transcription then flows through the normal chunk → embed → index pipeline. PDFs without a text layer (scans) are rendered page by page and OCR'd the same way, capped at `ocr_max_pages`. `/ask-image` answers a question about an uploaded image directly, without indexing it.
 
-**Agent** — `/agent` runs a planner → retriever → reasoner pipeline for questions that need decomposition: the LLM breaks the question into search queries, each query runs through the retrieval funnel (chunks already gathered are deduplicated), and a final LLM call synthesizes the answer from the labeled evidence. The response includes the full trace: plan, per-step findings, and answer. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
+Two earlier endpoints — `/chat` (a hand-rolled tool loop) and `/agent` (a hardcoded planner → retriever → reasoner pipeline, later rebuilt as a LangGraph fan-out graph) — were measured against the assistant and retired; DECISIONS.md records the comparison. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
 
 **Storage** — PostgreSQL is the source of truth: documents, chunks, logs, and later collections and users. Schema is managed with Alembic. Qdrant stores one vector per chunk; keeping the two in sync is the ingestion service's responsibility.
 
@@ -58,6 +58,10 @@ Business logic depends on interfaces only. Each concrete provider is one impleme
 | `VectorStore`       | Qdrant                    | pgvector, Chroma             |
 | `DocumentParser`    | txt/md, PDF, DOCX, images | HTML, more formats           |
 | `VisionProvider`    | Ollama (gemma3:4b)        | Any vision-capable API       |
+| `WebSearchProvider` | ddgs (DuckDuckGo)         | Tavily, Brave, SearXNG       |
+| `Reranker`          | ms-marco cross-encoder    | Any cross-encoder or API     |
+
+LangGraph sits outside this table on purpose: it orchestrates control flow (the assistant's model ⇄ tools cycle, checkpointing, interrupts) but never talks to a model or database itself — swapping any provider still touches one file.
 
 ## Data flow
 
@@ -92,7 +96,7 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (ask, chat, and agent modes), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
+The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (ask and assistant modes, with live tool-step cards and web-search approval prompts), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
 
 ## Background jobs
 

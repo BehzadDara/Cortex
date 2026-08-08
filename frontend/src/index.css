@@ -736,3 +736,36 @@ button.ghost.icon:hover {
   max-height: 180px;
   overflow-y: auto;
 }
+
+.approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  padding: 10px 12px;
+}
+
+.approval-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.approval-text svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.approval-actions button {
+  padding: 5px 14px;
+  font-size: 12.5px;
+}

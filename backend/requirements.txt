@@ -16,3 +16,5 @@ pypdfium2
 pillow
 ddgs
 langgraph
+langgraph-checkpoint-postgres
+psycopg-pool
