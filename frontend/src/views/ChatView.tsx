@@ -35,6 +35,10 @@ interface ChatMessage {
   approval?: Approval;
 }
 
+function isAbortError(caught: unknown): boolean {
+  return caught instanceof DOMException && caught.name === "AbortError";
+}
+
 function parseStoredContent(content: string): {
   content: string;
   attachment?: Attachment;
@@ -290,6 +294,20 @@ export default function ChatView() {
   const bottom = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const awaitingApproval = useRef(false);
+  const streamAbort = useRef<AbortController | null>(null);
+
+  function abortActiveStream() {
+    streamAbort.current?.abort();
+    streamAbort.current = null;
+    awaitingApproval.current = false;
+    setBusy(false);
+  }
+
+  function startStream(): AbortSignal {
+    const controller = new AbortController();
+    streamAbort.current = controller;
+    return controller.signal;
+  }
 
   function refreshConversations() {
     getConversations().then(setConversations).catch(() => {});
@@ -301,10 +319,12 @@ export default function ChatView() {
 
   useEffect(() => {
     if (routeId === null) {
+      abortActiveStream();
       setConversationId(null);
       setMessages([]);
       setError(null);
     } else if (routeId !== conversationId) {
+      abortActiveStream();
       openConversation(routeId);
     }
   }, [routeId]);
@@ -343,33 +363,39 @@ export default function ChatView() {
 
   async function continueRun(target: number) {
     setBusy(true);
+    const signal = startStream();
     try {
-      await continueAssistant(target, {
-        ...assistantHandlers(""),
-        onConversation: () => {},
-        onSnapshot: (question, steps, sources) => {
-          awaitingApproval.current = false;
-          setMessages((current) => [
-            ...current,
-            { role: "user", content: question },
-            {
-              role: "assistant",
-              content: PENDING_LABEL,
-              pending: true,
-              steps,
-              sources,
-            },
-          ]);
+      await continueAssistant(
+        target,
+        {
+          ...assistantHandlers(""),
+          onConversation: () => {},
+          onSnapshot: (question, steps, sources) => {
+            awaitingApproval.current = false;
+            setMessages((current) => [
+              ...current,
+              { role: "user", content: question },
+              {
+                role: "assistant",
+                content: PENDING_LABEL,
+                pending: true,
+                steps,
+                sources,
+              },
+            ]);
+          },
         },
-      });
+        signal,
+      );
       refreshConversations();
     } catch (caught) {
+      if (isAbortError(caught)) return;
       setMessages((current) =>
         current[current.length - 1]?.pending ? current.slice(0, -1) : current,
       );
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (!awaitingApproval.current) setBusy(false);
+      if (!signal.aborted && !awaitingApproval.current) setBusy(false);
     }
   }
 
@@ -453,21 +479,24 @@ export default function ChatView() {
       content: PENDING_LABEL,
       pending: true,
     }));
+    const signal = startStream();
     try {
       await resumeAssistant(
         approval.thread,
         conversationId,
         approved,
         assistantHandlers(""),
+        signal,
       );
       refreshConversations();
     } catch (caught) {
+      if (isAbortError(caught)) return;
       setMessages((current) =>
         current[current.length - 1]?.pending ? current.slice(0, -1) : current,
       );
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (!awaitingApproval.current) setBusy(false);
+      if (!signal.aborted && !awaitingApproval.current) setBusy(false);
     }
   }
 
@@ -539,22 +568,29 @@ export default function ChatView() {
       },
     ]);
 
+    const signal = startStream();
     try {
       if (image) {
-        const result = await askImage(image, trimmed, existingId);
+        const result = await askImage(image, trimmed, existingId, signal);
         replaceLastMessage({ role: "assistant", content: result.answer });
         adoptConversation(result.conversation_id, trimmed);
       } else {
-        await streamAssistant(trimmed, existingId, assistantHandlers(trimmed));
+        await streamAssistant(
+          trimmed,
+          existingId,
+          assistantHandlers(trimmed),
+          signal,
+        );
         refreshConversations();
       }
     } catch (caught) {
+      if (isAbortError(caught)) return;
       setMessages((current) =>
         current[current.length - 1]?.pending ? current.slice(0, -1) : current,
       );
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      if (!awaitingApproval.current) setBusy(false);
+      if (!signal.aborted && !awaitingApproval.current) setBusy(false);
     }
   }
 

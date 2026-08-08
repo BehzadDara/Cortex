@@ -101,12 +101,17 @@ export async function askImage(
   file: File,
   question: string,
   conversationId: number | null,
+  signal?: AbortSignal,
 ): Promise<ImageAnswer> {
   const form = new FormData();
   form.append("file", file);
   form.append("question", question);
   if (conversationId !== null) form.append("conversation_id", String(conversationId));
-  const response = await fetch(`${BASE}/ask-image`, { method: "POST", body: form });
+  const response = await fetch(`${BASE}/ask-image`, {
+    method: "POST",
+    body: form,
+    signal,
+  });
   if (!response.ok) throw await toError(response);
   return response.json();
 }
@@ -134,8 +139,12 @@ async function streamEvents(
   path: string,
   body: unknown,
   handlers: StreamHandlers,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${BASE}${path}`, jsonInit("POST", body));
+  const response = await fetch(`${BASE}${path}`, {
+    ...jsonInit("POST", body),
+    signal,
+  });
   if (!response.ok || !response.body) throw await toError(response);
 
   const reader = response.body.getReader();
@@ -172,11 +181,13 @@ export const streamAssistant = (
   question: string,
   conversationId: number | null,
   handlers: StreamHandlers,
+  signal?: AbortSignal,
 ) =>
   streamEvents(
     "/assistant",
     { question, conversation_id: conversationId },
     handlers,
+    signal,
   );
 
 export const resumeAssistant = (
@@ -184,19 +195,23 @@ export const resumeAssistant = (
   conversationId: number,
   approved: boolean,
   handlers: StreamHandlers,
+  signal?: AbortSignal,
 ) =>
   streamEvents(
     "/assistant/resume",
     { thread, conversation_id: conversationId, approved },
     handlers,
+    signal,
   );
 
 export const continueAssistant = (
   conversationId: number,
   handlers: StreamHandlers,
+  signal?: AbortSignal,
 ) =>
   streamEvents(
     "/assistant/continue",
     { conversation_id: conversationId },
     handlers,
+    signal,
   );
