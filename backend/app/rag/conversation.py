@@ -62,7 +62,11 @@ def conversation_messages(conversation: Conversation) -> list[dict]:
 
 
 def save_exchange(
-    conversation_id: int, question: str, answer: str, llm: LLMProvider
+    conversation_id: int,
+    question: str,
+    answer: str,
+    llm: LLMProvider,
+    steps: list[dict] | None = None,
 ) -> None:
     with SessionLocal() as session:
         conversation = session.get(Conversation, conversation_id)
@@ -70,7 +74,10 @@ def save_exchange(
             [
                 Message(conversation_id=conversation_id, role="user", content=question),
                 Message(
-                    conversation_id=conversation_id, role="assistant", content=answer
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=answer,
+                    steps=steps or None,
                 ),
             ]
         )

@@ -1,6 +1,4 @@
 import type {
-  AgentResult,
-  ChatResult,
   Collection,
   ConversationDetail,
   ConversationSummary,
@@ -97,26 +95,6 @@ export async function deleteDocument(id: number): Promise<void> {
   if (!response.ok) throw await toError(response);
 }
 
-export const chat = (question: string, conversationId: number | null) =>
-  request<ChatResult>(
-    "/chat",
-    jsonInit("POST", { question, conversation_id: conversationId }),
-  );
-
-export const runAgent = (
-  question: string,
-  collectionId: number | null,
-  conversationId: number | null,
-) =>
-  request<AgentResult>(
-    "/agent",
-    jsonInit("POST", {
-      question,
-      collection_id: collectionId,
-      conversation_id: conversationId,
-    }),
-  );
-
 export async function askImage(
   file: File,
   question: string,
@@ -135,22 +113,20 @@ export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);
 
-export async function streamAsk(
-  question: string,
-  collectionId: number | null,
-  conversationId: number | null,
-  onConversation: (id: number) => void,
-  onToken: (token: string) => void,
-  onTitle: (id: number, title: string) => void,
+export interface StreamHandlers {
+  onConversation: (id: number) => void;
+  onToken: (token: string) => void;
+  onTitle: (id: number, title: string) => void;
+  onToolCall?: (name: string, args: Record<string, unknown>) => void;
+  onToolResult?: (name: string, content: string) => void;
+}
+
+async function streamEvents(
+  path: string,
+  body: unknown,
+  handlers: StreamHandlers,
 ): Promise<void> {
-  const response = await fetch(
-    `${BASE}/ask`,
-    jsonInit("POST", {
-      question,
-      collection_id: collectionId,
-      conversation_id: conversationId,
-    }),
-  );
+  const response = await fetch(`${BASE}${path}`, jsonInit("POST", body));
   if (!response.ok || !response.body) throw await toError(response);
 
   const reader = response.body.getReader();
@@ -166,10 +142,46 @@ export async function streamAsk(
     for (const raw of events) {
       if (!raw.startsWith("data: ")) continue;
       const event = JSON.parse(raw.slice(6));
-      if (event.type === "conversation") onConversation(event.id);
-      else if (event.type === "token") onToken(event.content);
-      else if (event.type === "title") onTitle(event.id, event.title);
+      if (event.type === "conversation") handlers.onConversation(event.id);
+      else if (event.type === "token") handlers.onToken(event.content);
+      else if (event.type === "title") handlers.onTitle(event.id, event.title);
+      else if (event.type === "tool_call")
+        handlers.onToolCall?.(event.name, event.arguments);
+      else if (event.type === "tool_result")
+        handlers.onToolResult?.(event.name, event.content);
       else if (event.type === "done") return;
     }
   }
 }
+
+export const streamAsk = (
+  question: string,
+  collectionId: number | null,
+  conversationId: number | null,
+  handlers: StreamHandlers,
+) =>
+  streamEvents(
+    "/ask",
+    {
+      question,
+      collection_id: collectionId,
+      conversation_id: conversationId,
+    },
+    handlers,
+  );
+
+export const streamAssistant = (
+  question: string,
+  collectionId: number | null,
+  conversationId: number | null,
+  handlers: StreamHandlers,
+) =>
+  streamEvents(
+    "/assistant",
+    {
+      question,
+      collection_id: collectionId,
+      conversation_id: conversationId,
+    },
+    handlers,
+  );

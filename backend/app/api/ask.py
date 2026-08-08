@@ -1,4 +1,3 @@
-import json
 import time
 from collections.abc import Iterator
 
@@ -6,7 +5,12 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.common import find_or_create_conversation, start_title_generation
+from app.api.common import (
+    find_or_create_conversation,
+    sse_event,
+    start_title_generation,
+    title_event,
+)
 from app.config import settings
 from app.database import SessionLocal
 from app.dependencies import (
@@ -54,13 +58,6 @@ def save_prompt_log(
         session.commit()
 
 
-def title_event(conversation_id: int, title_holder: dict | None) -> str | None:
-    if title_holder is None or "title" not in title_holder:
-        return None
-    title = title_holder.pop("title")
-    return f"data: {json.dumps({'type': 'title', 'id': conversation_id, 'title': title})}\n\n"
-
-
 def sse_events(
     llm: LLMProvider,
     prompt: str,
@@ -68,21 +65,21 @@ def sse_events(
     conversation_id: int,
     title_holder: dict | None = None,
 ) -> Iterator[str]:
-    yield f"data: {json.dumps({'type': 'conversation', 'id': conversation_id})}\n\n"
+    yield sse_event({"type": "conversation", "id": conversation_id})
 
     started = time.perf_counter()
     usage: dict = {}
     tokens: list[str] = []
     for token in llm.stream(prompt, usage):
         tokens.append(token)
-        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+        yield sse_event({"type": "token", "content": token})
         event = title_event(conversation_id, title_holder)
         if event:
             yield event
     event = title_event(conversation_id, title_holder)
     if event:
         yield event
-    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+    yield sse_event({"type": "done"})
 
     answer = "".join(tokens)
     save_prompt_log(question, prompt, answer, started, usage)

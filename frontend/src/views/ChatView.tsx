@@ -1,19 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   askImage,
-  chat,
   deleteConversation,
   getCollections,
   getConversation,
   getConversations,
   renameConversation,
-  runAgent,
   streamAsk,
+  streamAssistant,
 } from "../api";
-import type { AgentResult, Collection, ConversationSummary } from "../types";
+import type { Collection, ConversationSummary, ToolStep } from "../types";
 
-type Mode = "ask" | "chat" | "agent";
+type Mode = "ask" | "assistant";
 
 interface Attachment {
   name: string;
@@ -25,8 +24,7 @@ interface ChatMessage {
   content: string;
   pending?: boolean;
   attachment?: Attachment;
-  tools?: string[];
-  trace?: AgentResult;
+  steps?: ToolStep[];
 }
 
 function parseStoredContent(content: string): {
@@ -40,15 +38,34 @@ function parseStoredContent(content: string): {
 
 const MODE_HINTS: Record<Mode, string> = {
   ask: "Answers come from your indexed documents, with conversation memory.",
-  chat: "The model decides which tools to use: document search, calculator, time.",
-  agent: "Plans sub-questions, searches each, then synthesizes an answer.",
+  assistant:
+    "The model works with tools — document search, web search, calculator — and shows each step.",
 };
 
 const PENDING_LABELS: Record<Mode, string> = {
   ask: "Thinking",
-  chat: "Choosing tools",
-  agent: "Planning and searching",
+  assistant: "Working",
 };
+
+const STEP_LABELS: Record<string, { running: string; done: string }> = {
+  search_documents: { running: "Searching documents", done: "Searched documents" },
+  web_search: { running: "Searching the web", done: "Searched the web" },
+  calculator: { running: "Calculating", done: "Calculated" },
+  current_time: { running: "Checking the time", done: "Checked the time" },
+};
+
+function stepLabel(step: ToolStep): string {
+  const labels = STEP_LABELS[step.name] ?? {
+    running: `Running ${step.name}`,
+    done: `Ran ${step.name}`,
+  };
+  return step.result === null ? labels.running : labels.done;
+}
+
+function stepDetail(step: ToolStep): string {
+  const detail = step.arguments.query ?? step.arguments.expression ?? "";
+  return String(detail);
+}
 
 function PencilIcon() {
   return (
@@ -80,6 +97,76 @@ function FileIcon() {
       <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
       <path d="M14 2v4a2 2 0 0 0 2 2h4" />
     </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </svg>
+  );
+}
+
+function CalculatorIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="16" height="20" x="4" y="2" rx="2" />
+      <path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function WrenchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
+
+const STEP_ICONS: Record<string, ComponentType> = {
+  search_documents: SearchIcon,
+  web_search: GlobeIcon,
+  calculator: CalculatorIcon,
+  current_time: ClockIcon,
+};
+
+function StepRow({ step }: { step: ToolStep }) {
+  const Icon = STEP_ICONS[step.name] ?? WrenchIcon;
+  const detail = stepDetail(step);
+  const running = step.result === null;
+
+  return (
+    <details className="step">
+      <summary>
+        <Icon />
+        <span>{stepLabel(step)}</span>
+        {detail && <span className="step-detail">{detail}</span>}
+        {running && <span className="dots" aria-hidden="true" />}
+      </summary>
+      {step.result && <div className="step-result">{step.result}</div>}
+    </details>
   );
 }
 
@@ -157,6 +244,7 @@ export default function ChatView() {
             role: message.role === "user" ? ("user" as const) : ("assistant" as const),
             content: parsed.content,
             attachment: parsed.attachment,
+            steps: message.steps ?? undefined,
           };
         }),
       );
@@ -180,6 +268,35 @@ export default function ChatView() {
 
   function replaceLastMessage(message: ChatMessage) {
     setMessages((current) => [...current.slice(0, -1), message]);
+  }
+
+  function updateLastMessage(update: (last: ChatMessage) => ChatMessage) {
+    setMessages((current) => [
+      ...current.slice(0, -1),
+      update(current[current.length - 1]),
+    ]);
+  }
+
+  function addStep(name: string, args: Record<string, unknown>) {
+    updateLastMessage((last) => ({
+      ...last,
+      steps: [...(last.steps ?? []), { name, arguments: args, result: null }],
+      content: PENDING_LABELS.assistant,
+      pending: true,
+    }));
+  }
+
+  function resolveStep(name: string, content: string) {
+    updateLastMessage((last) => {
+      const steps = [...(last.steps ?? [])];
+      for (let index = steps.length - 1; index >= 0; index--) {
+        if (steps[index].name === name && steps[index].result === null) {
+          steps[index] = { ...steps[index], result: content };
+          break;
+        }
+      }
+      return { ...last, steps };
+    });
   }
 
   function adoptConversation(created: number, firstQuestion: string) {
@@ -256,31 +373,21 @@ export default function ChatView() {
         replaceLastMessage({ role: "assistant", content: result.answer });
         adoptConversation(result.conversation_id, trimmed);
       } else if (mode === "ask") {
-        await streamAsk(
-          trimmed,
-          collectionId,
-          existingId,
-          (created) => adoptConversation(created, trimmed),
-          appendAssistantToken,
-          applyTitle,
-        );
+        await streamAsk(trimmed, collectionId, existingId, {
+          onConversation: (created) => adoptConversation(created, trimmed),
+          onToken: appendAssistantToken,
+          onTitle: applyTitle,
+        });
         refreshConversations();
-      } else if (mode === "chat") {
-        const result = await chat(trimmed, existingId);
-        replaceLastMessage({
-          role: "assistant",
-          content: result.answer,
-          tools: result.tools_used,
-        });
-        adoptConversation(result.conversation_id, trimmed);
       } else {
-        const result = await runAgent(trimmed, collectionId, existingId);
-        replaceLastMessage({
-          role: "assistant",
-          content: result.answer,
-          trace: result,
+        await streamAssistant(trimmed, collectionId, existingId, {
+          onConversation: (created) => adoptConversation(created, trimmed),
+          onToken: appendAssistantToken,
+          onTitle: applyTitle,
+          onToolCall: addStep,
+          onToolResult: resolveStep,
         });
-        adoptConversation(result.conversation_id, trimmed);
+        refreshConversations();
       }
     } catch (caught) {
       setMessages((current) =>
@@ -357,7 +464,7 @@ export default function ChatView() {
       <section className="chat-main">
         <div className="chat-toolbar">
           <div className="mode-switch">
-            {(["ask", "chat", "agent"] as Mode[]).map((name) => (
+            {(["ask", "assistant"] as Mode[]).map((name) => (
               <button
                 key={name}
                 className={mode === name ? "active" : ""}
@@ -367,22 +474,20 @@ export default function ChatView() {
               </button>
             ))}
           </div>
-          {mode !== "chat" && (
-            <select
-              aria-label="Collection filter"
-              value={collectionId ?? ""}
-              onChange={(event) =>
-                setCollectionId(event.target.value ? Number(event.target.value) : null)
-              }
-            >
-              <option value="">All collections</option>
-              {collections.map((collection) => (
-                <option key={collection.id} value={collection.id}>
-                  {collection.name}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            aria-label="Collection filter"
+            value={collectionId ?? ""}
+            onChange={(event) =>
+              setCollectionId(event.target.value ? Number(event.target.value) : null)
+            }
+          >
+            <option value="">All collections</option>
+            {collections.map((collection) => (
+              <option key={collection.id} value={collection.id}>
+                {collection.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="chat-messages">
@@ -399,6 +504,13 @@ export default function ChatView() {
                   <AttachmentCard attachment={message.attachment} />
                 )}
                 <div className={`message ${message.role}`}>
+                {message.steps && message.steps.length > 0 && (
+                  <div className="steps">
+                    {message.steps.map((step, i) => (
+                      <StepRow key={i} step={step} />
+                    ))}
+                  </div>
+                )}
                 {message.pending ? (
                   <span className="thinking">
                     {message.content}
@@ -406,33 +518,6 @@ export default function ChatView() {
                   </span>
                 ) : (
                   message.content
-                )}
-                {message.tools && message.tools.length > 0 && (
-                  <div className="chips">
-                    {message.tools.map((tool, i) => (
-                      <span key={i} className="chip">
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {message.trace && (
-                  <div className="trace">
-                    <div>
-                      <strong>Plan</strong>
-                    </div>
-                    {message.trace.plan.map((step, i) => (
-                      <div key={i}>• {step}</div>
-                    ))}
-                    <div style={{ marginTop: 6 }}>
-                      <strong>Evidence</strong>
-                    </div>
-                    {message.trace.steps.map((step, i) => (
-                      <div key={i}>
-                        {step.query} → {step.findings.length} findings
-                      </div>
-                    ))}
-                  </div>
                 )}
                 </div>
               </div>

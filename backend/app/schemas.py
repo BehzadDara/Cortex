@@ -86,32 +86,16 @@ class PromptLogResponse(BaseModel):
     created_at: datetime
 
 
-class AgentStepResponse(BaseModel):
-    query: str
-    findings: list[str]
-
-
-class AgentResponse(BaseModel):
-    conversation_id: int
-    plan: list[str]
-    steps: list[AgentStepResponse]
-    answer: str
-
-
-class ChatRequest(BaseModel):
-    question: str
-    conversation_id: int | None = None
-
-
-class ChatResponse(BaseModel):
-    conversation_id: int
-    answer: str
-    tools_used: list[str]
+class ToolStep(BaseModel):
+    name: str
+    arguments: dict
+    result: str | None = None
 
 
 class MessageResponse(BaseModel):
     role: str
     content: str
+    steps: list[ToolStep] | None = None
 
 
 class ConversationSummary(BaseModel):

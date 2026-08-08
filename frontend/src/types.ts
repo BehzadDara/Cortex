@@ -20,10 +20,16 @@ export interface ConversationSummary {
   created_at: string;
 }
 
+export interface ToolStep {
+  name: string;
+  arguments: Record<string, unknown>;
+  result: string | null;
+}
+
 export interface ConversationDetail {
   id: number;
   summary: string | null;
-  messages: { role: string; content: string }[];
+  messages: { role: string; content: string; steps: ToolStep[] | null }[];
 }
 
 export interface Job {
@@ -33,24 +39,6 @@ export interface Job {
   detail: string | null;
   created_at: string;
   finished_at: string | null;
-}
-
-export interface ChatResult {
-  conversation_id: number;
-  answer: string;
-  tools_used: string[];
-}
-
-export interface AgentStep {
-  query: string;
-  findings: string[];
-}
-
-export interface AgentResult {
-  conversation_id: number;
-  plan: string[];
-  steps: AgentStep[];
-  answer: string;
 }
 
 export interface ImageAnswer {

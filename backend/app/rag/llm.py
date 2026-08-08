@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -27,6 +27,13 @@ class LLMProvider(Protocol):
     def complete(self, prompt: str) -> str: ...
 
     def chat(self, messages: list[dict], tools: list[dict]) -> ChatReply: ...
+
+    def chat_stream(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        on_token: Callable[[str], None],
+    ) -> ChatReply: ...
 
 
 class OllamaLLMProvider:
@@ -66,6 +73,48 @@ class OllamaLLMProvider:
             content=message.get("content", ""),
             tool_calls=tool_calls,
             raw_message=message,
+        )
+
+    def chat_stream(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        on_token: Callable[[str], None],
+    ) -> ChatReply:
+        request = {
+            **self.base_request(),
+            "messages": messages,
+            "tools": tools,
+            "stream": True,
+        }
+        content_parts: list[str] = []
+        raw_calls: list[dict] = []
+        with httpx.stream(
+            "POST", f"{settings.ollama_url}/api/chat", json=request, timeout=300
+        ) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                part = json.loads(line)
+                message = part.get("message") or {}
+                token = message.get("content", "")
+                if token:
+                    content_parts.append(token)
+                    on_token(token)
+                raw_calls.extend(message.get("tool_calls") or [])
+
+        content = "".join(content_parts)
+        raw_message: dict = {"role": "assistant", "content": content}
+        if raw_calls:
+            raw_message["tool_calls"] = raw_calls
+        tool_calls = [
+            ToolCall(
+                name=call["function"]["name"],
+                arguments=call["function"].get("arguments") or {},
+            )
+            for call in raw_calls
+        ]
+        return ChatReply(
+            content=content, tool_calls=tool_calls, raw_message=raw_message
         )
 
     def complete(self, prompt: str) -> str:

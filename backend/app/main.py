@@ -3,9 +3,8 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api import (
-    agent,
     ask,
-    chat,
+    assistant,
     collections,
     conversations,
     documents,
@@ -21,8 +20,7 @@ app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)
 app.include_router(ask.router)
-app.include_router(chat.router)
-app.include_router(agent.router)
+app.include_router(assistant.router)
 app.include_router(vision.router)
 app.include_router(stats.router)
 app.include_router(jobs.router)
