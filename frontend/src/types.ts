@@ -30,6 +30,7 @@ export interface Source {
   id: number;
   filename: string;
   content: string;
+  url: string | null;
 }
 
 export interface ConversationDetail {

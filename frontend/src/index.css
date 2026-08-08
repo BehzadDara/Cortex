@@ -850,6 +850,15 @@ button.citation.active {
   color: var(--foreground);
 }
 
+.source-title a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.source-title a:hover {
+  text-decoration: underline;
+}
+
 .source-content {
   padding: 8px 10px;
   color: var(--muted-foreground);

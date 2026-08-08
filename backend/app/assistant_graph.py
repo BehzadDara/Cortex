@@ -10,6 +10,7 @@ from app.config import settings
 from app.rag.llm import LLMProvider, ToolCall
 from app.tools import (
     DOCUMENT_SEARCH_DEFINITION,
+    WEB_SEARCH_DEFINITION,
     SourceChunk,
     Tool,
     to_definition,
@@ -23,9 +24,9 @@ SYSTEM_PROMPT = (
     "search_documents call per sub-topic before anything else. "
     "Only use web_search when focused document searches also come back empty. "
     "Use the calculator for arithmetic and current_time for date or time. "
-    "Document passages are labeled with bracketed numbers like [1]. "
-    "When a claim in your answer comes from a passage, cite that passage's "
-    "number right after the claim, like [1] or [2][3]. "
+    "Document passages and web results are labeled with bracketed numbers "
+    "like [1]. When a claim in your answer comes from one, cite its number "
+    "right after the claim, like [1] or [2][3]. "
     "Cite only numbers that appear in the search results. "
     "Once you have the evidence, answer directly and concisely from it."
 )
@@ -73,42 +74,67 @@ def preview(result: str) -> str:
 
 def number_sources(found: list[SourceChunk], offset: int) -> list[dict]:
     return [
-        {"id": offset + position, "filename": chunk.filename, "content": chunk.content}
+        {
+            "id": offset + position,
+            "filename": chunk.filename,
+            "content": chunk.content,
+            "url": chunk.url,
+        }
         for position, chunk in enumerate(found, start=1)
     ]
 
 
-def format_sources(sources: list[dict]) -> str:
+def format_source(source: dict) -> str:
+    header = f"[{source['id']}] {source['filename']}"
+    if source["url"]:
+        header += f"\n{source['url']}"
+    return f"{header}\n{source['content']}"
+
+
+def format_sources(sources: list[dict], empty_message: str) -> str:
     if not sources:
-        return "No matching documents found."
-    return "\n\n---\n\n".join(
-        f"[{source['id']}] {source['filename']}\n{source['content']}"
-        for source in sources
-    )
+        return empty_message
+    return "\n\n---\n\n".join(format_source(source) for source in sources)
 
 
 def build_assistant_graph(
     llm: LLMProvider,
     tools: list[Tool],
     search_documents,
+    search_web,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
-    definitions = [DOCUMENT_SEARCH_DEFINITION, *(to_definition(tool) for tool in tools)]
+    definitions = [
+        DOCUMENT_SEARCH_DEFINITION,
+        WEB_SEARCH_DEFINITION,
+        *(to_definition(tool) for tool in tools),
+    ]
     tool_map = {tool.name: tool for tool in tools}
 
-    def run_document_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
-        found = number_sources(search_documents(query), offset)
-        output = format_sources(found)
-        writer(
-            {
-                "type": "tool_result",
-                "name": "search_documents",
-                "content": preview(output),
-            }
-        )
+    def run_search(
+        search, name: str, empty_message: str, query: str, offset: int, writer
+    ) -> tuple[list[dict], str]:
+        found = number_sources(search(query), offset)
+        output = format_sources(found, empty_message)
+        writer({"type": "tool_result", "name": name, "content": preview(output)})
         if found:
             writer({"type": "sources", "sources": found})
         return found, output
+
+    def run_document_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
+        return run_search(
+            search_documents,
+            "search_documents",
+            "No matching documents found.",
+            query,
+            offset,
+            writer,
+        )
+
+    def run_web_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
+        return run_search(
+            search_web, "web_search", "No web results found.", query, offset, writer
+        )
 
     def retrieve(state: AssistantState) -> dict:
         writer = get_stream_writer()
@@ -176,6 +202,12 @@ def build_assistant_graph(
             elif call.name == "search_documents":
                 offset = len(state["sources"]) + len(new_sources)
                 found, output = run_document_search(
+                    str(call.arguments.get("query", "")), offset, writer
+                )
+                new_sources.extend(found)
+            elif call.name == "web_search":
+                offset = len(state["sources"]) + len(new_sources)
+                found, output = run_web_search(
                     str(call.arguments.get("query", "")), offset, writer
                 )
                 new_sources.extend(found)

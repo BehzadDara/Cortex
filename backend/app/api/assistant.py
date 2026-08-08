@@ -40,7 +40,7 @@ from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 from app.rag.web_search import WebSearchProvider
 from app.schemas import AskRequest, ContinueRequest, ResumeRequest
-from app.tools import build_document_search, build_tools
+from app.tools import build_document_search, build_tools, build_web_search
 
 router = APIRouter(tags=["assistant"])
 
@@ -55,10 +55,11 @@ def build_graph(
     web_search: WebSearchProvider,
     llm: LLMProvider,
 ):
-    tools = build_tools(web_search)
+    tools = build_tools()
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
+    search_web = build_web_search(web_search)
     return build_assistant_graph(
-        llm, tools, search_documents, checkpointer=get_checkpointer()
+        llm, tools, search_documents, search_web, checkpointer=get_checkpointer()
     )
 
 

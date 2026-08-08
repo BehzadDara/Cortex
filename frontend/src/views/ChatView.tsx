@@ -219,8 +219,14 @@ function AnswerBody({
       {active && (
         <div className="source-card">
           <div className="source-title">
-            <FileIcon />
-            {active.filename}
+            {active.url ? <GlobeIcon /> : <FileIcon />}
+            {active.url ? (
+              <a href={active.url} target="_blank" rel="noopener noreferrer">
+                {active.filename}
+              </a>
+            ) : (
+              active.filename
+            )}
           </div>
           <div className="source-content">{active.content}</div>
         </div>

@@ -105,6 +105,7 @@ class SourceRef(BaseModel):
     id: int
     filename: str
     content: str
+    url: str | None = None
 
 
 class MessageResponse(BaseModel):

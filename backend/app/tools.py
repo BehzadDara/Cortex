@@ -69,20 +69,30 @@ def current_time() -> str:
 class SourceChunk:
     filename: str
     content: str
+    url: str | None = None
 
+
+SEARCH_PARAMETERS = {
+    "type": "object",
+    "properties": {"query": {"type": "string", "description": "The search query"}},
+    "required": ["query"],
+}
 
 DOCUMENT_SEARCH_DEFINITION = {
     "type": "function",
     "function": {
         "name": "search_documents",
         "description": "Search the user's indexed documents and return the most relevant passages.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "The search query"}
-            },
-            "required": ["query"],
-        },
+        "parameters": SEARCH_PARAMETERS,
+    },
+}
+
+WEB_SEARCH_DEFINITION = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": "Search the public web for current or general information that is not in the user's documents.",
+        "parameters": SEARCH_PARAMETERS,
     },
 }
 
@@ -111,28 +121,24 @@ def build_document_search(
     return search_documents
 
 
-def build_tools(web_search: WebSearchProvider) -> list[Tool]:
-    def search_web(query: str) -> str:
-        results = web_search.search(query)
-        if not results:
-            return "No web results found."
-        return "\n\n".join(
-            f"{result.title}\n{result.url}\n{result.snippet}" for result in results
-        )
+def build_web_search(web_search: WebSearchProvider):
+    def search_web(query: str) -> list[SourceChunk]:
+        try:
+            results = web_search.search(query)
+        except Exception:
+            return []
+        return [
+            SourceChunk(
+                filename=result.title, content=result.snippet, url=result.url
+            )
+            for result in results
+        ]
 
+    return search_web
+
+
+def build_tools() -> list[Tool]:
     return [
-        Tool(
-            name="web_search",
-            description="Search the public web for current or general information that is not in the user's documents.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The search query"}
-                },
-                "required": ["query"],
-            },
-            run=search_web,
-        ),
         Tool(
             name="calculator",
             description="Evaluate an arithmetic expression using numbers and the operators + - * / % **.",
