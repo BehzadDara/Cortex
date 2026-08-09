@@ -530,12 +530,34 @@ tbody tr:hover {
   padding: 10px 14px;
 }
 
-.message-usage {
-  margin-top: 8px;
-  padding-top: 6px;
+.message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
   color: var(--muted-foreground);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: default;
+}
+
+.meta-value {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.meta-label {
+  color: var(--muted-foreground);
 }
 
 .thinking {

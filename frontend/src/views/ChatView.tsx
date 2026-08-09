@@ -42,14 +42,6 @@ function formatDuration(ms: number): string {
   return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 }
 
-function formatUsage(usage: Usage): string {
-  const prompt = usage.prompt_tokens.toLocaleString();
-  const response = usage.response_tokens.toLocaleString();
-  const tokens = `${prompt} prompt · ${response} response tokens`;
-  if (usage.elapsed_ms === null) return tokens;
-  return `${formatDuration(usage.elapsed_ms)} · ${tokens}`;
-}
-
 function isAbortError(caught: unknown): boolean {
   return caught instanceof DOMException && caught.name === "AbortError";
 }
@@ -158,6 +150,24 @@ function ClockIcon() {
   );
 }
 
+function ArrowDownIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </svg>
+  );
+}
+
+function ArrowUpIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 12 7-7 7 7" />
+      <path d="M12 19V5" />
+    </svg>
+  );
+}
+
 function WrenchIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -251,6 +261,29 @@ function AnswerBody({
         </div>
       )}
     </>
+  );
+}
+
+function UsageMeta({ usage }: { usage: Usage }) {
+  return (
+    <div className="message-meta">
+      {usage.elapsed_ms !== null && (
+        <span className="meta-item" title="Response time">
+          <ClockIcon />
+          <span className="meta-value">{formatDuration(usage.elapsed_ms)}</span>
+        </span>
+      )}
+      <span className="meta-item" title="Prompt tokens">
+        <ArrowDownIcon />
+        <span className="meta-value">{usage.prompt_tokens.toLocaleString()}</span>
+        <span className="meta-label">prompt</span>
+      </span>
+      <span className="meta-item" title="Response tokens">
+        <ArrowUpIcon />
+        <span className="meta-value">{usage.response_tokens.toLocaleString()}</span>
+        <span className="meta-label">response</span>
+      </span>
+    </div>
   );
 }
 
@@ -743,7 +776,7 @@ export default function ChatView() {
                   message.content
                 )}
                 {message.usage && !message.pending && !message.approval && (
-                  <div className="message-usage">{formatUsage(message.usage)}</div>
+                  <UsageMeta usage={message.usage} />
                 )}
                 </div>
               </div>
