@@ -97,7 +97,7 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (one assistant conversation surface, with live tool-step cards and web-search approval prompts), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
+The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (one assistant conversation surface, with live tool-step cards, web-search approval prompts, and mermaid code blocks rendered as downloadable SVG diagrams), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, average latency, token usage, and recent prompt history.
 
 ## Background jobs
 

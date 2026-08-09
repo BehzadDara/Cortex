@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-09 — Mermaid diagrams: a renderer the model must be told about
+
+Answers can now carry mermaid code blocks; the frontend lazy-loads mermaid (main bundle unchanged, the diagram machinery arrives as separate chunks on first use), renders them to SVG with a download button, and falls back to the raw code while streaming or on invalid syntax. The first live test produced "Ranking flowchart (textual): 1 → 2 → 3" — the renderer existed but nothing told the model, so the system prompt now advertises the capability. Two more rules earned by testing: node labels must be double-quoted (unquoted parentheses inside labels are a mermaid parse error the fallback would silently swallow), and a message that already contains everything needed to answer must not enter the search cascade — one run tried to web-search "how to draw a flowchart" it had full instructions for. Lesson: a capability the model cannot see does not exist; every renderer needs a prompt-side advertisement, and every format rule needs a 4B model's syntax pitfalls spelled out.
+
 ## 2026-08-09 — The model gets today's date in the system prompt
 
 Two web-search answers called Aug 2026 "a future date, which may be an error" — qwen3 believes its training-cutoff year is the present, and nothing corrected it (the `current_time` tool exists, but the model saw no reason to call it before doubting a date). The system message now ends with "Today is <weekday, month day, year>", built per run so a long-lived server never staples a stale date into fresh conversations. Lesson: a frozen-clock model treats every post-cutoff date as suspicious; the current date is context the model cannot be trusted to fetch for itself.

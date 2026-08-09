@@ -29,7 +29,8 @@ SYSTEM_PROMPT = (
     "before anything else, and only use web_search when those also come back "
     "empty. "
     "If the message is just small talk or tells you what to say back, answer "
-    "it directly and never search for it. "
+    "it directly and never search for it. The same applies when the message "
+    "itself already contains everything needed to answer. "
     "When no document results appear, the question does not need the user's "
     "documents: use web_search for live or public information. "
     "Use the calculator for arithmetic and current_time for date or time. "
@@ -38,6 +39,11 @@ SYSTEM_PROMPT = (
     "right after the claim, like [1] or [2][3]. "
     "Cite only numbers that appear in the search results. "
     "If you have no search results, do not write bracketed numbers at all. "
+    "When the user asks for a diagram, flowchart, or chart, write it as a "
+    "mermaid code block — the interface renders mermaid. Prefer flowchart "
+    "syntax and always put node labels in double quotes, like "
+    'A["label"] --> B["label"]. Keep citation numbers out of the diagram; '
+    "cite in the surrounding text instead. "
     "Once you have the evidence, answer directly and concisely from it."
 )
 

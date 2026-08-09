@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import { useNavigate, useParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
@@ -183,6 +189,83 @@ const STEP_ICONS: Record<string, ComponentType> = {
   current_time: ClockIcon,
 };
 
+function DownloadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" x2="12" y1="15" y2="3" />
+    </svg>
+  );
+}
+
+function downloadSvg(svg: string) {
+  const blob = new Blob([svg], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "diagram.svg";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+let mermaidSequence = 0;
+
+function MermaidBlock({ code }: { code: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSvg(null);
+    import("mermaid")
+      .then(async ({ default: mermaid }) => {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "neutral",
+          securityLevel: "strict",
+        });
+        const { svg: rendered } = await mermaid.render(
+          `mermaid-${++mermaidSequence}`,
+          code,
+        );
+        if (!cancelled) setSvg(rendered);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  if (svg === null) return <code>{code}</code>;
+  return (
+    <div className="mermaid-figure">
+      <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />
+      <button
+        className="ghost mermaid-download"
+        onClick={() => downloadSvg(svg)}
+        aria-label="Download diagram as SVG"
+      >
+        <DownloadIcon />
+        Download SVG
+      </button>
+    </div>
+  );
+}
+
+function CodeBlock({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: ReactNode;
+}) {
+  const language = /language-(\w+)/.exec(className ?? "")?.[1];
+  if (language === "mermaid") {
+    return <MermaidBlock code={String(children).trim()} />;
+  }
+  return <code className={className}>{children}</code>;
+}
+
 function Markdown({ children }: { children: string }) {
   return (
     <div className="markdown">
@@ -220,6 +303,7 @@ function AnswerBody({
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
+            code: CodeBlock,
             a: ({ href, children, ...props }) => {
               if (href?.startsWith("#source-")) {
                 const id = Number(href.slice("#source-".length));

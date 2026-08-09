@@ -806,6 +806,29 @@ button.ghost.icon:hover {
   padding: 0;
 }
 
+.markdown pre:has(.mermaid-diagram) {
+  background: transparent;
+  padding: 0;
+}
+
+.mermaid-diagram {
+  overflow-x: auto;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
 .markdown blockquote {
   margin: 0 0 8px;
   padding-left: 10px;
