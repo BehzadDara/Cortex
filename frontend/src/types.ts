@@ -33,6 +33,11 @@ export interface Source {
   url: string | null;
 }
 
+export interface Usage {
+  prompt_tokens: number;
+  response_tokens: number;
+}
+
 export interface ConversationDetail {
   id: number;
   summary: string | null;
@@ -42,6 +47,8 @@ export interface ConversationDetail {
     content: string;
     steps: ToolStep[] | null;
     sources: Source[] | null;
+    prompt_tokens: number | null;
+    response_tokens: number | null;
   }[];
 }
 

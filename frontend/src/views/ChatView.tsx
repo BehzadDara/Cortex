@@ -12,7 +12,7 @@ import {
   resumeAssistant,
   streamAssistant,
 } from "../api";
-import type { ConversationSummary, Source, ToolStep } from "../types";
+import type { ConversationSummary, Source, ToolStep, Usage } from "../types";
 
 interface Attachment {
   name: string;
@@ -33,6 +33,13 @@ interface ChatMessage {
   steps?: ToolStep[];
   sources?: Source[];
   approval?: Approval;
+  usage?: Usage;
+}
+
+function formatUsage(usage: Usage): string {
+  const prompt = usage.prompt_tokens.toLocaleString();
+  const response = usage.response_tokens.toLocaleString();
+  return `${prompt} prompt · ${response} response tokens`;
 }
 
 function isAbortError(caught: unknown): boolean {
@@ -350,6 +357,13 @@ export default function ChatView() {
             attachment: parsed.attachment,
             steps: message.steps ?? undefined,
             sources: message.sources ?? undefined,
+            usage:
+              message.prompt_tokens !== null && message.response_tokens !== null
+                ? {
+                    prompt_tokens: message.prompt_tokens,
+                    response_tokens: message.response_tokens,
+                  }
+                : undefined,
           };
         }),
       );
@@ -460,6 +474,10 @@ export default function ChatView() {
     }));
   }
 
+  function applyUsage(usage: Usage) {
+    updateLastMessage((last) => ({ ...last, usage }));
+  }
+
   const assistantHandlers = (firstQuestion: string) => ({
     onConversation: (created: number) => adoptConversation(created, firstQuestion),
     onToken: appendAssistantToken,
@@ -467,6 +485,7 @@ export default function ChatView() {
     onToolCall: addStep,
     onToolResult: resolveStep,
     onSources: addSources,
+    onUsage: applyUsage,
     onApproval: requestApproval,
   });
 
@@ -713,6 +732,9 @@ export default function ChatView() {
                   <AnswerBody content={message.content} sources={message.sources} />
                 ) : (
                   message.content
+                )}
+                {message.usage && !message.pending && !message.approval && (
+                  <div className="message-usage">{formatUsage(message.usage)}</div>
                 )}
                 </div>
               </div>

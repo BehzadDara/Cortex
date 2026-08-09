@@ -19,6 +19,7 @@ from app.assistant_graph import (
     final_answer,
     initial_state,
     state_question,
+    state_usage,
 )
 from app.checkpoints import get_checkpointer
 from app.config import settings
@@ -97,7 +98,14 @@ def clear_active_thread(conversation_id: int) -> None:
             session.commit()
 
 
-def save_prompt_log(question: str, prompt: str, response: str, started: float) -> None:
+def save_prompt_log(
+    question: str,
+    prompt: str,
+    response: str,
+    started: float,
+    prompt_tokens: int,
+    response_tokens: int,
+) -> None:
     latency_ms = int((time.perf_counter() - started) * 1000)
     with SessionLocal() as session:
         session.add(
@@ -107,6 +115,8 @@ def save_prompt_log(question: str, prompt: str, response: str, started: float) -
                 response=response,
                 model=settings.llm_model,
                 latency_ms=latency_ms,
+                prompt_tokens=prompt_tokens,
+                response_tokens=response_tokens,
             )
         )
         session.commit()
@@ -147,13 +157,27 @@ def stream_events(
     event = title_event(conversation_id, holder)
     if event:
         yield event
+    if final_state is not None:
+        prompt_tokens, response_tokens = state_usage(final_state)
+        yield sse_event(
+            {
+                "type": "usage",
+                "prompt_tokens": prompt_tokens,
+                "response_tokens": response_tokens,
+            }
+        )
     yield sse_event({"type": "done"})
 
     if final_state is not None:
         question = state_question(final_state)
         answer = final_answer(final_state)
         save_prompt_log(
-            question, format_transcript(final_state["messages"]), answer, started
+            question,
+            format_transcript(final_state["messages"]),
+            answer,
+            started,
+            prompt_tokens,
+            response_tokens,
         )
         save_exchange(
             conversation_id,
@@ -162,6 +186,8 @@ def stream_events(
             llm,
             steps=extract_steps(final_state["messages"]),
             sources=final_state.get("sources"),
+            prompt_tokens=prompt_tokens,
+            response_tokens=response_tokens,
         )
         clear_active_thread(conversation_id)
 

@@ -56,6 +56,8 @@ def save_exchange(
     llm: LLMProvider,
     steps: list[dict] | None = None,
     sources: list[dict] | None = None,
+    prompt_tokens: int | None = None,
+    response_tokens: int | None = None,
 ) -> None:
     with SessionLocal() as session:
         conversation = session.get(Conversation, conversation_id)
@@ -68,6 +70,8 @@ def save_exchange(
                     content=answer,
                     steps=steps or None,
                     sources=sources or None,
+                    prompt_tokens=prompt_tokens,
+                    response_tokens=response_tokens,
                 ),
             ]
         )

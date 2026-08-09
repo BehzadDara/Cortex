@@ -90,6 +90,8 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     steps: Mapped[list | None] = mapped_column(JSONB)
     sources: Mapped[list | None] = mapped_column(JSONB)
+    prompt_tokens: Mapped[int | None]
+    response_tokens: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

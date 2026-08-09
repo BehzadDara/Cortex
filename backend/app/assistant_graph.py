@@ -48,6 +48,8 @@ class AssistantState(TypedDict):
     sources: Annotated[list[dict], operator.add]
     needs_documents: bool
     rounds: int
+    prompt_tokens: Annotated[int, operator.add]
+    response_tokens: Annotated[int, operator.add]
 
 
 def parse_tool_calls(message: dict) -> list[ToolCall]:
@@ -196,7 +198,12 @@ def build_assistant_graph(
             writer(
                 {"type": "tool_call", "name": call.name, "arguments": call.arguments}
             )
-        return {"messages": [reply.raw_message], "rounds": state["rounds"] + 1}
+        return {
+            "messages": [reply.raw_message],
+            "rounds": state["rounds"] + 1,
+            "prompt_tokens": reply.prompt_tokens,
+            "response_tokens": reply.response_tokens,
+        }
 
     def run_tools(state: AssistantState) -> dict:
         writer = get_stream_writer()
@@ -273,6 +280,8 @@ def initial_state(history: list[dict], question: str) -> AssistantState:
         "sources": [],
         "needs_documents": True,
         "rounds": 0,
+        "prompt_tokens": 0,
+        "response_tokens": 0,
     }
 
 
@@ -281,6 +290,10 @@ def final_answer(state: AssistantState) -> str:
     if last.get("role") == "assistant" and last.get("content"):
         return last["content"]
     return FALLBACK_ANSWER
+
+
+def state_usage(state: AssistantState) -> tuple[int, int]:
+    return state.get("prompt_tokens", 0), state.get("response_tokens", 0)
 
 
 def state_question(state: AssistantState) -> str:

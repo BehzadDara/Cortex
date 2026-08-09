@@ -9,6 +9,7 @@ import type {
   Source,
   Stats,
   ToolStep,
+  Usage,
 } from "./types";
 
 const BASE = "/api";
@@ -127,6 +128,7 @@ export interface StreamHandlers {
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   onToolResult?: (name: string, content: string) => void;
   onSources?: (sources: Source[]) => void;
+  onUsage?: (usage: Usage) => void;
   onSnapshot?: (question: string, steps: ToolStep[], sources: Source[]) => void;
   onApproval?: (
     name: string,
@@ -168,6 +170,11 @@ async function streamEvents(
       else if (event.type === "tool_result")
         handlers.onToolResult?.(event.name, event.content);
       else if (event.type === "sources") handlers.onSources?.(event.sources);
+      else if (event.type === "usage")
+        handlers.onUsage?.({
+          prompt_tokens: event.prompt_tokens,
+          response_tokens: event.response_tokens,
+        });
       else if (event.type === "snapshot")
         handlers.onSnapshot?.(event.question, event.steps, event.sources);
       else if (event.type === "approval")

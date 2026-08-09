@@ -19,6 +19,8 @@ class ChatReply:
     content: str
     tool_calls: list[ToolCall]
     raw_message: dict
+    prompt_tokens: int = 0
+    response_tokens: int = 0
 
 
 class LLMProvider(Protocol):
@@ -62,12 +64,17 @@ class OllamaLLMProvider:
         }
         content_parts: list[str] = []
         raw_calls: list[dict] = []
+        prompt_tokens = 0
+        response_tokens = 0
         with httpx.stream(
             "POST", f"{settings.ollama_url}/api/chat", json=request, timeout=300
         ) as response:
             response.raise_for_status()
             for line in response.iter_lines():
                 part = json.loads(line)
+                if part.get("done"):
+                    prompt_tokens = part.get("prompt_eval_count") or 0
+                    response_tokens = part.get("eval_count") or 0
                 message = part.get("message") or {}
                 token = message.get("content", "")
                 if token:
@@ -87,7 +94,11 @@ class OllamaLLMProvider:
             for call in raw_calls
         ]
         return ChatReply(
-            content=content, tool_calls=tool_calls, raw_message=raw_message
+            content=content,
+            tool_calls=tool_calls,
+            raw_message=raw_message,
+            prompt_tokens=prompt_tokens,
+            response_tokens=response_tokens,
         )
 
     def complete(self, prompt: str) -> str:
