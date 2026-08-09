@@ -113,6 +113,7 @@ class MessageResponse(BaseModel):
     content: str
     steps: list[ToolStep] | None = None
     sources: list[SourceRef] | None = None
+    elapsed_ms: int | None = None
     prompt_tokens: int | None = None
     response_tokens: int | None = None
 

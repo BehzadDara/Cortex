@@ -56,6 +56,7 @@ def save_exchange(
     llm: LLMProvider,
     steps: list[dict] | None = None,
     sources: list[dict] | None = None,
+    elapsed_ms: int | None = None,
     prompt_tokens: int | None = None,
     response_tokens: int | None = None,
 ) -> None:
@@ -70,6 +71,7 @@ def save_exchange(
                     content=answer,
                     steps=steps or None,
                     sources=sources or None,
+                    elapsed_ms=elapsed_ms,
                     prompt_tokens=prompt_tokens,
                     response_tokens=response_tokens,
                 ),

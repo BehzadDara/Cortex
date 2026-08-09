@@ -172,6 +172,7 @@ async function streamEvents(
       else if (event.type === "sources") handlers.onSources?.(event.sources);
       else if (event.type === "usage")
         handlers.onUsage?.({
+          elapsed_ms: event.elapsed_ms,
           prompt_tokens: event.prompt_tokens,
           response_tokens: event.response_tokens,
         });

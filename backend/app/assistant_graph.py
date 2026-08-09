@@ -1,4 +1,6 @@
 import operator
+import time
+from dataclasses import dataclass
 from typing import Annotated, TypedDict
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -48,8 +50,26 @@ class AssistantState(TypedDict):
     sources: Annotated[list[dict], operator.add]
     needs_documents: bool
     rounds: int
+    elapsed_ms: Annotated[int, operator.add]
     prompt_tokens: Annotated[int, operator.add]
     response_tokens: Annotated[int, operator.add]
+
+
+@dataclass
+class RunUsage:
+    elapsed_ms: int
+    prompt_tokens: int
+    response_tokens: int
+
+
+def timed(node):
+    def run(state: AssistantState) -> dict:
+        started = time.perf_counter()
+        update = node(state)
+        update["elapsed_ms"] = int((time.perf_counter() - started) * 1000)
+        return update
+
+    return run
 
 
 def parse_tool_calls(message: dict) -> list[ToolCall]:
@@ -258,10 +278,10 @@ def build_assistant_graph(
         return END
 
     graph = StateGraph(AssistantState)
-    graph.add_node("route", route)
-    graph.add_node("retrieve", retrieve)
-    graph.add_node("model", model)
-    graph.add_node("tools", run_tools)
+    graph.add_node("route", timed(route))
+    graph.add_node("retrieve", timed(retrieve))
+    graph.add_node("model", timed(model))
+    graph.add_node("tools", timed(run_tools))
     graph.add_edge(START, "route")
     graph.add_conditional_edges("route", after_route, ["retrieve", "model"])
     graph.add_edge("retrieve", "model")
@@ -280,6 +300,7 @@ def initial_state(history: list[dict], question: str) -> AssistantState:
         "sources": [],
         "needs_documents": True,
         "rounds": 0,
+        "elapsed_ms": 0,
         "prompt_tokens": 0,
         "response_tokens": 0,
     }
@@ -292,8 +313,12 @@ def final_answer(state: AssistantState) -> str:
     return FALLBACK_ANSWER
 
 
-def state_usage(state: AssistantState) -> tuple[int, int]:
-    return state.get("prompt_tokens", 0), state.get("response_tokens", 0)
+def state_usage(state: AssistantState) -> RunUsage:
+    return RunUsage(
+        elapsed_ms=state.get("elapsed_ms", 0),
+        prompt_tokens=state.get("prompt_tokens", 0),
+        response_tokens=state.get("response_tokens", 0),
+    )
 
 
 def state_question(state: AssistantState) -> str:

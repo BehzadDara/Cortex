@@ -115,4 +115,4 @@ cd backend
 .venv/bin/python -m evals.run --retrieval-only # fast, no LLM
 ```
 
-Every `/assistant` exchange is logged to the `prompt_logs` table with question, a transcript of the tool steps, response, model, latency, and token counts summed over the run's model rounds; the same counts persist on the assistant message and render under the answer.
+Every `/assistant` exchange is logged to the `prompt_logs` table with question, a transcript of the tool steps, response, model, latency, and token counts summed over the run's model rounds. Token counts and the run's wall clock — each graph node times itself into state, so segments of an interrupted run sum and approval wait time is excluded — persist on the assistant message and render under the answer.

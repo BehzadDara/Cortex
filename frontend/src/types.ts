@@ -34,6 +34,7 @@ export interface Source {
 }
 
 export interface Usage {
+  elapsed_ms: number | null;
   prompt_tokens: number;
   response_tokens: number;
 }
@@ -47,6 +48,7 @@ export interface ConversationDetail {
     content: string;
     steps: ToolStep[] | null;
     sources: Source[] | null;
+    elapsed_ms: number | null;
     prompt_tokens: number | null;
     response_tokens: number | null;
   }[];

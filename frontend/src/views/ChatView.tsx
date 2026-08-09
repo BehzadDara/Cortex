@@ -36,10 +36,18 @@ interface ChatMessage {
   usage?: Usage;
 }
 
+function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
 function formatUsage(usage: Usage): string {
   const prompt = usage.prompt_tokens.toLocaleString();
   const response = usage.response_tokens.toLocaleString();
-  return `${prompt} prompt · ${response} response tokens`;
+  const tokens = `${prompt} prompt · ${response} response tokens`;
+  if (usage.elapsed_ms === null) return tokens;
+  return `${formatDuration(usage.elapsed_ms)} · ${tokens}`;
 }
 
 function isAbortError(caught: unknown): boolean {
@@ -360,6 +368,7 @@ export default function ChatView() {
             usage:
               message.prompt_tokens !== null && message.response_tokens !== null
                 ? {
+                    elapsed_ms: message.elapsed_ms,
                     prompt_tokens: message.prompt_tokens,
                     response_tokens: message.response_tokens,
                   }

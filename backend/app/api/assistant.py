@@ -158,12 +158,13 @@ def stream_events(
     if event:
         yield event
     if final_state is not None:
-        prompt_tokens, response_tokens = state_usage(final_state)
+        usage = state_usage(final_state)
         yield sse_event(
             {
                 "type": "usage",
-                "prompt_tokens": prompt_tokens,
-                "response_tokens": response_tokens,
+                "elapsed_ms": usage.elapsed_ms,
+                "prompt_tokens": usage.prompt_tokens,
+                "response_tokens": usage.response_tokens,
             }
         )
     yield sse_event({"type": "done"})
@@ -176,8 +177,8 @@ def stream_events(
             format_transcript(final_state["messages"]),
             answer,
             started,
-            prompt_tokens,
-            response_tokens,
+            usage.prompt_tokens,
+            usage.response_tokens,
         )
         save_exchange(
             conversation_id,
@@ -186,8 +187,9 @@ def stream_events(
             llm,
             steps=extract_steps(final_state["messages"]),
             sources=final_state.get("sources"),
-            prompt_tokens=prompt_tokens,
-            response_tokens=response_tokens,
+            elapsed_ms=usage.elapsed_ms,
+            prompt_tokens=usage.prompt_tokens,
+            response_tokens=usage.response_tokens,
         )
         clear_active_thread(conversation_id)
 
