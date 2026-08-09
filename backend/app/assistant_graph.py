@@ -2,6 +2,7 @@ import operator
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, TypedDict
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -294,10 +295,15 @@ def build_assistant_graph(
     return graph.compile(checkpointer=checkpointer)
 
 
+def system_message() -> dict:
+    today = datetime.now().strftime("%A, %B %-d, %Y")
+    return {"role": "system", "content": f"{SYSTEM_PROMPT} Today is {today}."}
+
+
 def initial_state(history: list[dict], question: str) -> AssistantState:
     return {
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            system_message(),
             *history,
             {"role": "user", "content": question},
         ],

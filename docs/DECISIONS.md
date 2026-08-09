@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-08-09 — The model gets today's date in the system prompt
+
+Two web-search answers called Aug 2026 "a future date, which may be an error" — qwen3 believes its training-cutoff year is the present, and nothing corrected it (the `current_time` tool exists, but the model saw no reason to call it before doubting a date). The system message now ends with "Today is <weekday, month day, year>", built per run so a long-lived server never staples a stale date into fresh conversations. Lesson: a frozen-clock model treats every post-cutoff date as suspicious; the current date is context the model cannot be trusted to fetch for itself.
+
 ## 2026-08-09 — Phantom citations on unsourced runs
 
 "tell me a joke" came back with a trailing [1] — the run had no search, no sources, nothing to cite; the standing citation instructions pattern-matched the 4B model into decorating the answer anyway (the frontend chip guard correctly refused to link it, leaving inert text). Two-layer fix: the system prompt now states outright that no search results means no bracketed numbers, and `final_answer` strips unmatched markers when the run's source registry is empty — sourced runs are untouched, so real citations cannot be collateral damage. Accepted trade-off: an unsourced answer discussing bracket syntax as literal text would lose it. Verified both directions: the joke persists clean, an espresso question keeps its [1]. Same lesson as the invented web-citation ids: a small model will emit whatever format the prompt teaches, so every format rule needs an enforcement path outside the model. Verification also surfaced a wart worth remembering: explicitly-passed None in the JSONB columns persists as JSON null rather than SQL NULL, so `IS NOT NULL` checks on `messages.steps`/`sources` lie.
