@@ -1,4 +1,5 @@
 import operator
+import re
 import time
 from dataclasses import dataclass
 from typing import Annotated, TypedDict
@@ -26,6 +27,8 @@ SYSTEM_PROMPT = (
     "into sub-topics and run one focused search_documents call per sub-topic "
     "before anything else, and only use web_search when those also come back "
     "empty. "
+    "If the message is just small talk or tells you what to say back, answer "
+    "it directly and never search for it. "
     "When no document results appear, the question does not need the user's "
     "documents: use web_search for live or public information. "
     "Use the calculator for arithmetic and current_time for date or time. "
@@ -33,6 +36,7 @@ SYSTEM_PROMPT = (
     "like [1]. When a claim in your answer comes from one, cite its number "
     "right after the claim, like [1] or [2][3]. "
     "Cite only numbers that appear in the search results. "
+    "If you have no search results, do not write bracketed numbers at all. "
     "Once you have the evidence, answer directly and concisely from it."
 )
 
@@ -306,10 +310,18 @@ def initial_state(history: list[dict], question: str) -> AssistantState:
     }
 
 
+CITATION_MARKER = re.compile(r"\s*\[\d+\](?!\()")
+
+
+def strip_citation_markers(text: str) -> str:
+    return CITATION_MARKER.sub("", text).strip()
+
+
 def final_answer(state: AssistantState) -> str:
     last = state["messages"][-1]
     if last.get("role") == "assistant" and last.get("content"):
-        return last["content"]
+        answer = last["content"]
+        return answer if state.get("sources") else strip_citation_markers(answer)
     return FALLBACK_ANSWER
 
 

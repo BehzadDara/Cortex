@@ -22,5 +22,11 @@
   { "question": "What time is it?", "needs_documents": false },
   { "question": "What's the latest news about OpenAI?", "needs_documents": false },
   { "question": "Calculate (12 + 8) ** 2 / 4", "needs_documents": false },
-  { "question": "Look up current mortgage rates online.", "needs_documents": false }
+  { "question": "Look up current mortgage rates online.", "needs_documents": false },
+  { "question": "Reply with just the word hi.", "needs_documents": false },
+  { "question": "Say hello in exactly three words.", "needs_documents": false },
+  { "question": "Tell me a joke.", "needs_documents": false },
+  { "question": "Wish me luck with my exam!", "needs_documents": false },
+  { "question": "Tell me what my notes say about coffee brewing.", "needs_documents": true },
+  { "question": "Reply with the chunk size used by the Cortex backend.", "needs_documents": true }
 ]

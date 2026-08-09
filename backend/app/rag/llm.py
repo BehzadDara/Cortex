@@ -103,6 +103,7 @@ class OllamaLLMProvider:
 
     def complete(self, prompt: str) -> str:
         request = {**self.base_request(), "prompt": prompt, "stream": False}
+        request["options"] = {**request["options"], "temperature": 0}
         response = httpx.post(
             f"{settings.ollama_url}/api/generate", json=request, timeout=300
         )
