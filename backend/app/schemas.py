@@ -56,6 +56,7 @@ def to_job_response(job) -> JobResponse:
 class AskRequest(BaseModel):
     question: str
     conversation_id: int | None = None
+    timezone: str | None = None
 
 
 class ResumeRequest(BaseModel):
@@ -108,11 +109,17 @@ class SourceRef(BaseModel):
     url: str | None = None
 
 
+class WidgetPayload(BaseModel):
+    kind: str
+    data: dict
+
+
 class MessageResponse(BaseModel):
     role: str
     content: str
     steps: list[ToolStep] | None = None
     sources: list[SourceRef] | None = None
+    widgets: list[WidgetPayload] | None = None
     elapsed_ms: int | None = None
     prompt_tokens: int | None = None
     response_tokens: int | None = None

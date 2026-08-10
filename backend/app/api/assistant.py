@@ -28,17 +28,21 @@ from app.dependencies import (
     get_embedding_provider,
     get_fast_llm_provider,
     get_llm_provider,
+    get_market_data_provider,
     get_reranker,
     get_session,
     get_vector_store,
+    get_weather_provider,
     get_web_search,
 )
 from app.models import Conversation, PromptLog
 from app.rag.conversation import conversation_messages, save_exchange
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
+from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
+from app.rag.weather import WeatherProvider
 from app.rag.web_search import WebSearchProvider
 from app.schemas import AskRequest, ContinueRequest, ResumeRequest
 from app.tools import build_document_search, build_tools, build_web_search
@@ -56,8 +60,10 @@ def build_graph(
     web_search: WebSearchProvider,
     llm: LLMProvider,
     fast_llm: LLMProvider,
+    weather: WeatherProvider,
+    market_data: MarketDataProvider,
 ):
-    tools = build_tools()
+    tools = build_tools(weather, market_data)
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
     search_web = build_web_search(web_search)
     return build_assistant_graph(
@@ -187,6 +193,7 @@ def stream_events(
             llm,
             steps=extract_steps(final_state["messages"]),
             sources=final_state.get("sources"),
+            widgets=final_state.get("widgets"),
             elapsed_ms=usage.elapsed_ms,
             prompt_tokens=usage.prompt_tokens,
             response_tokens=usage.response_tokens,
@@ -204,6 +211,8 @@ def assistant(
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
+    weather: WeatherProvider = Depends(get_weather_provider),
+    market_data: MarketDataProvider = Depends(get_market_data_provider),
 ) -> StreamingResponse:
     conversation, is_new = find_or_create_conversation(
         session, request.conversation_id, request.question
@@ -214,14 +223,22 @@ def assistant(
 
     history = conversation_messages(conversation)
     graph = build_graph(
-        session, embeddings, vector_store, reranker, web_search, llm, fast_llm
+        session,
+        embeddings,
+        vector_store,
+        reranker,
+        web_search,
+        llm,
+        fast_llm,
+        weather,
+        market_data,
     )
     thread_id = uuid4().hex
     set_active_thread(session, conversation, thread_id)
     return StreamingResponse(
         stream_events(
             graph,
-            initial_state(history, request.question),
+            initial_state(history, request.question, request.timezone),
             thread_id,
             conversation.id,
             title_holder if is_new else None,
@@ -241,6 +258,8 @@ def continue_run(
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
+    weather: WeatherProvider = Depends(get_weather_provider),
+    market_data: MarketDataProvider = Depends(get_market_data_provider),
 ) -> StreamingResponse:
     conversation = session.get(Conversation, request.conversation_id)
     if conversation is None:
@@ -249,7 +268,15 @@ def continue_run(
         raise HTTPException(status_code=409, detail="No active run to continue")
 
     graph = build_graph(
-        session, embeddings, vector_store, reranker, web_search, llm, fast_llm
+        session,
+        embeddings,
+        vector_store,
+        reranker,
+        web_search,
+        llm,
+        fast_llm,
+        weather,
+        market_data,
     )
     thread_id = conversation.active_thread
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
@@ -261,6 +288,7 @@ def continue_run(
         "question": state_question(state.values),
         "steps": extract_steps(state.values["messages"]),
         "sources": state.values.get("sources") or [],
+        "widgets": state.values.get("widgets") or [],
     }
     return StreamingResponse(
         stream_events(
@@ -286,12 +314,22 @@ def resume(
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
+    weather: WeatherProvider = Depends(get_weather_provider),
+    market_data: MarketDataProvider = Depends(get_market_data_provider),
 ) -> StreamingResponse:
     if session.get(Conversation, request.conversation_id) is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     graph = build_graph(
-        session, embeddings, vector_store, reranker, web_search, llm, fast_llm
+        session,
+        embeddings,
+        vector_store,
+        reranker,
+        web_search,
+        llm,
+        fast_llm,
+        weather,
+        market_data,
     )
     return StreamingResponse(
         stream_events(

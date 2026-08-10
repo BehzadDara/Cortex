@@ -7,9 +7,11 @@ from app.config import settings
 from app.database import SessionLocal
 from app.rag.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
 from app.rag.llm import LLMProvider, OllamaLLMProvider
+from app.rag.market_data import CoinGeckoMarketData, MarketDataProvider
 from app.rag.reranking import CrossEncoderReranker, Reranker
 from app.rag.vector_store import QdrantVectorStore, VectorStore
 from app.rag.vision import OllamaVisionProvider, VisionProvider
+from app.rag.weather import OpenMeteoWeather, WeatherProvider
 from app.rag.web_search import DdgsWebSearch, WebSearchProvider
 
 
@@ -51,3 +53,13 @@ def get_vision_provider() -> VisionProvider:
 @lru_cache
 def get_web_search() -> WebSearchProvider:
     return DdgsWebSearch()
+
+
+@lru_cache
+def get_weather_provider() -> WeatherProvider:
+    return OpenMeteoWeather()
+
+
+@lru_cache
+def get_market_data_provider() -> MarketDataProvider:
+    return CoinGeckoMarketData()

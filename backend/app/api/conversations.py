@@ -86,6 +86,7 @@ def get_conversation(
                 content=message.content,
                 steps=message.steps,
                 sources=message.sources,
+                widgets=message.widgets,
                 elapsed_ms=message.elapsed_ms,
                 prompt_tokens=message.prompt_tokens,
                 response_tokens=message.response_tokens,

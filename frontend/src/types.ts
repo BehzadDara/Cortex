@@ -39,6 +39,11 @@ export interface Usage {
   response_tokens: number;
 }
 
+export interface Widget {
+  kind: string;
+  data: Record<string, unknown>;
+}
+
 export interface ConversationDetail {
   id: number;
   summary: string | null;
@@ -48,6 +53,7 @@ export interface ConversationDetail {
     content: string;
     steps: ToolStep[] | null;
     sources: Source[] | null;
+    widgets: Widget[] | null;
     elapsed_ms: number | null;
     prompt_tokens: number | null;
     response_tokens: number | null;

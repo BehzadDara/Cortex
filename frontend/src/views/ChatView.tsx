@@ -18,7 +18,8 @@ import {
   resumeAssistant,
   streamAssistant,
 } from "../api";
-import type { ConversationSummary, Source, ToolStep, Usage } from "../types";
+import type { ConversationSummary, Source, ToolStep, Usage, Widget } from "../types";
+import { WidgetList } from "./ChatWidgets";
 
 interface Attachment {
   name: string;
@@ -38,6 +39,7 @@ interface ChatMessage {
   attachment?: Attachment;
   steps?: ToolStep[];
   sources?: Source[];
+  widgets?: Widget[];
   approval?: Approval;
   usage?: Usage;
 }
@@ -71,6 +73,9 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
   web_search: { running: "Searching the web", done: "Searched the web" },
   calculator: { running: "Calculating", done: "Calculated" },
   current_time: { running: "Checking the time", done: "Checked the time" },
+  world_clock: { running: "Checking the time", done: "Checked the time" },
+  get_weather: { running: "Checking the weather", done: "Checked the weather" },
+  crypto_price: { running: "Fetching market prices", done: "Fetched market prices" },
 };
 
 function stepLabel(step: ToolStep): string {
@@ -82,7 +87,13 @@ function stepLabel(step: ToolStep): string {
 }
 
 function stepDetail(step: ToolStep): string {
-  const detail = step.arguments.query ?? step.arguments.expression ?? "";
+  const detail =
+    step.arguments.query ??
+    step.arguments.expression ??
+    step.arguments.city ??
+    step.arguments.coin ??
+    step.arguments.timezone ??
+    "";
   return String(detail);
 }
 
@@ -182,11 +193,31 @@ function WrenchIcon() {
   );
 }
 
+function CloudIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+    </svg>
+  );
+}
+
+function ChartIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <path d="m19 9-5 5-4-4-3 3" />
+    </svg>
+  );
+}
+
 const STEP_ICONS: Record<string, ComponentType> = {
   search_documents: SearchIcon,
   web_search: GlobeIcon,
   calculator: CalculatorIcon,
   current_time: ClockIcon,
+  world_clock: ClockIcon,
+  get_weather: CloudIcon,
+  crypto_price: ChartIcon,
 };
 
 function DownloadIcon() {
@@ -482,6 +513,7 @@ export default function ChatView() {
             attachment: parsed.attachment,
             steps: message.steps ?? undefined,
             sources: message.sources ?? undefined,
+            widgets: message.widgets ?? undefined,
             usage:
               message.prompt_tokens !== null && message.response_tokens !== null
                 ? {
@@ -510,7 +542,7 @@ export default function ChatView() {
         {
           ...assistantHandlers(""),
           onConversation: () => {},
-          onSnapshot: (question, steps, sources) => {
+          onSnapshot: (question, steps, sources, widgets) => {
             awaitingApproval.current = false;
             setMessages((current) => [
               ...current,
@@ -521,6 +553,7 @@ export default function ChatView() {
                 pending: true,
                 steps,
                 sources,
+                widgets,
               },
             ]);
           },
@@ -600,6 +633,13 @@ export default function ChatView() {
     }));
   }
 
+  function addWidget(widget: Widget) {
+    updateLastMessage((last) => ({
+      ...last,
+      widgets: [...(last.widgets ?? []), widget],
+    }));
+  }
+
   function applyUsage(usage: Usage) {
     updateLastMessage((last) => ({ ...last, usage }));
   }
@@ -611,6 +651,7 @@ export default function ChatView() {
     onToolCall: addStep,
     onToolResult: resolveStep,
     onSources: addSources,
+    onWidget: addWidget,
     onUsage: applyUsage,
     onApproval: requestApproval,
   });
@@ -855,7 +896,10 @@ export default function ChatView() {
                     <span className="dots" aria-hidden="true" />
                   </span>
                 ) : message.role === "assistant" ? (
-                  <AnswerBody content={message.content} sources={message.sources} />
+                  <>
+                    {message.widgets && <WidgetList widgets={message.widgets} />}
+                    <AnswerBody content={message.content} sources={message.sources} />
+                  </>
                 ) : (
                   message.content
                 )}

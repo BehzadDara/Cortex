@@ -10,6 +10,7 @@ import type {
   Stats,
   ToolStep,
   Usage,
+  Widget,
 } from "./types";
 
 const BASE = "/api";
@@ -128,8 +129,14 @@ export interface StreamHandlers {
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   onToolResult?: (name: string, content: string) => void;
   onSources?: (sources: Source[]) => void;
+  onWidget?: (widget: Widget) => void;
   onUsage?: (usage: Usage) => void;
-  onSnapshot?: (question: string, steps: ToolStep[], sources: Source[]) => void;
+  onSnapshot?: (
+    question: string,
+    steps: ToolStep[],
+    sources: Source[],
+    widgets: Widget[],
+  ) => void;
   onApproval?: (
     name: string,
     args: Record<string, unknown>,
@@ -170,6 +177,7 @@ async function streamEvents(
       else if (event.type === "tool_result")
         handlers.onToolResult?.(event.name, event.content);
       else if (event.type === "sources") handlers.onSources?.(event.sources);
+      else if (event.type === "widget") handlers.onWidget?.(event.widget);
       else if (event.type === "usage")
         handlers.onUsage?.({
           elapsed_ms: event.elapsed_ms,
@@ -177,7 +185,12 @@ async function streamEvents(
           response_tokens: event.response_tokens,
         });
       else if (event.type === "snapshot")
-        handlers.onSnapshot?.(event.question, event.steps, event.sources);
+        handlers.onSnapshot?.(
+          event.question,
+          event.steps,
+          event.sources,
+          event.widgets ?? [],
+        );
       else if (event.type === "approval")
         handlers.onApproval?.(event.name, event.arguments, event.thread);
       else if (event.type === "done") return;
@@ -193,7 +206,11 @@ export const streamAssistant = (
 ) =>
   streamEvents(
     "/assistant",
-    { question, conversation_id: conversationId },
+    {
+      question,
+      conversation_id: conversationId,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
     handlers,
     signal,
   );

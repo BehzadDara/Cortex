@@ -1,17 +1,32 @@
 import ast
 import operator
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.rag.embeddings import EmbeddingProvider
+from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
 from app.rag.vector_store import VectorStore
+from app.rag.weather import WeatherProvider
 from app.rag.web_search import WebSearchProvider
+
+
+@dataclass
+class Widget:
+    kind: str
+    data: dict
+
+
+@dataclass
+class ToolOutput:
+    text: str
+    widget: Widget | None = None
 
 
 @dataclass
@@ -19,7 +34,7 @@ class Tool:
     name: str
     description: str
     parameters: dict
-    run: Callable[..., str]
+    run: Callable[..., str | ToolOutput]
 
 
 def to_definition(tool: Tool) -> dict:
@@ -61,8 +76,149 @@ def calculate(expression: str) -> str:
     return str(evaluate_node(tree.body))
 
 
-def current_time() -> str:
-    return datetime.now().astimezone().strftime("%A, %Y-%m-%d %H:%M:%S %Z")
+def resolve_zone(name: str):
+    if name in ("", "local"):
+        return datetime.now().astimezone().tzinfo
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+
+def format_utc_offset(moment: datetime) -> str:
+    offset = moment.utcoffset()
+    total_minutes = int(offset.total_seconds() // 60) if offset else 0
+    sign = "+" if total_minutes >= 0 else "-"
+    hours, minutes = divmod(abs(total_minutes), 60)
+    return f"{sign}{hours:02d}:{minutes:02d}"
+
+
+def zone_label(zone_name: str) -> str:
+    return zone_name.rsplit("/", 1)[-1].replace("_", " ")
+
+
+def world_clock(timezone: str = "local") -> ToolOutput:
+    zone = resolve_zone(timezone)
+    if zone is None:
+        return ToolOutput(
+            text=(
+                f"Unknown timezone '{timezone}'. "
+                "Pass an IANA name like Asia/Tehran or Europe/Berlin."
+            )
+        )
+    now = datetime.now(zone)
+    offset = format_utc_offset(now)
+    label = zone_label(timezone) if timezone not in ("", "local") else "your timezone"
+    return ToolOutput(
+        text=(
+            f"Current time in {label}: "
+            f"{now.strftime('%A, %Y-%m-%d %H:%M')} (UTC{offset})"
+        ),
+        widget=Widget(
+            kind="clock",
+            data={
+                "timezone": timezone if timezone not in ("", "local") else None,
+                "label": label,
+                "iso_time": now.isoformat(),
+                "utc_offset": offset,
+            },
+        ),
+    )
+
+
+def format_price(value: float) -> str:
+    if value >= 1:
+        return f"{value:,.2f}"
+    return f"{value:.4g}"
+
+
+def build_weather_tool(weather: WeatherProvider) -> Tool:
+    def get_weather(city: str) -> ToolOutput:
+        report = weather.current(city)
+        if report is None:
+            return ToolOutput(text=f"No weather data found for '{city}'.")
+        return ToolOutput(
+            text=(
+                f"Weather in {report.city}, {report.country}: {report.condition}, "
+                f"{report.temperature_c:g}°C (feels like {report.feels_like_c:g}°C), "
+                f"humidity {report.humidity}%, wind {report.wind_kmh:g} km/h, "
+                f"today {report.low_c:g} to {report.high_c:g}°C."
+            ),
+            widget=Widget(kind="weather", data=asdict(report)),
+        )
+
+    return Tool(
+        name="get_weather",
+        description="Get the current weather conditions for a city.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "city": {
+                    "type": "string",
+                    "description": "City name, e.g. Tehran or Berlin",
+                }
+            },
+            "required": ["city"],
+        },
+        run=get_weather,
+    )
+
+
+def build_crypto_tool(market_data: MarketDataProvider) -> Tool:
+    def crypto_price(coin: str) -> ToolOutput:
+        coin_id = coin.strip().lower().replace(" ", "-")
+        history = market_data.day_history(coin_id)
+        if history is None:
+            return ToolOutput(
+                text=(
+                    f"No price data found for '{coin}'. "
+                    "Pass a CoinGecko id like bitcoin or ethereum."
+                )
+            )
+        prices = [point.price for point in history.points]
+        current, opening = prices[-1], prices[0]
+        change_pct = (current - opening) / opening * 100
+        return ToolOutput(
+            text=(
+                f"{coin_id} price: ${format_price(current)} now, "
+                f"{change_pct:+.2f}% over the last 24 hours, "
+                f"high ${format_price(max(prices))}, low ${format_price(min(prices))}."
+            ),
+            widget=Widget(
+                kind="price_chart",
+                data={
+                    "coin": history.coin,
+                    "currency": history.currency,
+                    "current": current,
+                    "change_pct": round(change_pct, 2),
+                    "high": max(prices),
+                    "low": min(prices),
+                    "points": [
+                        {"t": point.timestamp_ms, "p": point.price}
+                        for point in history.points
+                    ],
+                },
+            ),
+        )
+
+    return Tool(
+        name="crypto_price",
+        description=(
+            "Get the current price and last 24 hours of price history "
+            "for a cryptocurrency."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "coin": {
+                    "type": "string",
+                    "description": "CoinGecko coin id, e.g. bitcoin or ethereum",
+                }
+            },
+            "required": ["coin"],
+        },
+        run=crypto_price,
+    )
 
 
 @dataclass
@@ -137,7 +293,9 @@ def build_web_search(web_search: WebSearchProvider):
     return search_web
 
 
-def build_tools() -> list[Tool]:
+def build_tools(
+    weather: WeatherProvider, market_data: MarketDataProvider
+) -> list[Tool]:
     return [
         Tool(
             name="calculator",
@@ -155,9 +313,22 @@ def build_tools() -> list[Tool]:
             run=calculate,
         ),
         Tool(
-            name="current_time",
-            description="Get the current local date and time.",
-            parameters={"type": "object", "properties": {}},
-            run=current_time,
+            name="world_clock",
+            description=(
+                "Get the current date and time in a timezone. "
+                "Defaults to the user's timezone when none is given."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "description": "IANA timezone name, e.g. Asia/Tehran or Europe/Berlin",
+                    }
+                },
+            },
+            run=world_clock,
         ),
+        build_weather_tool(weather),
+        build_crypto_tool(market_data),
     ]

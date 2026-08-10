@@ -18,6 +18,7 @@ from app.tools import (
     WEB_SEARCH_DEFINITION,
     SourceChunk,
     Tool,
+    ToolOutput,
     to_definition,
 )
 
@@ -32,8 +33,18 @@ SYSTEM_PROMPT = (
     "it directly and never search for it. The same applies when the message "
     "itself already contains everything needed to answer. "
     "When no document results appear, the question does not need the user's "
-    "documents: use web_search for live or public information. "
-    "Use the calculator for arithmetic and current_time for date or time. "
+    "documents: use web_search for live or public information that no "
+    "dedicated tool covers. "
+    "Use the calculator for arithmetic. "
+    "Use world_clock for date or time, passing the IANA timezone of the place "
+    "the user asks about, like Asia/Tehran; when no place is named, pass the "
+    "user's timezone. "
+    "Use get_weather for current weather in a place. "
+    "Use crypto_price for cryptocurrency prices, passing the CoinGecko id "
+    "like bitcoin or ethereum. "
+    "world_clock, get_weather, and crypto_price each render a visual card in "
+    "the interface, so after calling one, answer in one short sentence and "
+    "never repeat the card's numbers in a list or table. "
     "Document passages and web results are labeled with bracketed numbers "
     "like [1]. When a claim in your answer comes from one, cite its number "
     "right after the claim, like [1] or [2][3]. "
@@ -59,6 +70,7 @@ RESULT_PREVIEW_CHARS = 500
 class AssistantState(TypedDict):
     messages: Annotated[list[dict], operator.add]
     sources: Annotated[list[dict], operator.add]
+    widgets: Annotated[list[dict], operator.add]
     needs_documents: bool
     rounds: int
     elapsed_ms: Annotated[int, operator.add]
@@ -93,14 +105,17 @@ def parse_tool_calls(message: dict) -> list[ToolCall]:
     ]
 
 
-def execute_tool(tool_map: dict[str, Tool], call: ToolCall) -> str:
+def execute_tool(tool_map: dict[str, Tool], call: ToolCall) -> ToolOutput:
     tool = tool_map.get(call.name)
     if tool is None:
-        return f"Unknown tool: {call.name}"
+        return ToolOutput(text=f"Unknown tool: {call.name}")
     try:
-        return tool.run(**call.arguments)
+        result = tool.run(**call.arguments)
     except Exception as error:
-        return f"Tool error: {error}"
+        return ToolOutput(text=f"Tool error: {error}")
+    if isinstance(result, ToolOutput):
+        return result
+    return ToolOutput(text=result)
 
 
 def preview(result: str) -> str:
@@ -246,6 +261,7 @@ def build_assistant_graph(
         }
         results = []
         new_sources: list[dict] = []
+        new_widgets: list[dict] = []
         for index, call in enumerate(calls):
             if approvals.get(index) is False:
                 output = DECLINED_RESULT
@@ -269,7 +285,8 @@ def build_assistant_graph(
                 )
                 new_sources.extend(found)
             else:
-                output = execute_tool(tool_map, call)
+                tool_output = execute_tool(tool_map, call)
+                output = tool_output.text
                 writer(
                     {
                         "type": "tool_result",
@@ -277,10 +294,17 @@ def build_assistant_graph(
                         "content": preview(output),
                     }
                 )
+                if tool_output.widget is not None:
+                    widget = {
+                        "kind": tool_output.widget.kind,
+                        "data": tool_output.widget.data,
+                    }
+                    writer({"type": "widget", "widget": widget})
+                    new_widgets.append(widget)
             results.append(
                 {"role": "tool", "tool_name": call.name, "content": output}
             )
-        return {"messages": results, "sources": new_sources}
+        return {"messages": results, "sources": new_sources, "widgets": new_widgets}
 
     def next_step(state: AssistantState) -> str:
         wants_tools = bool(state["messages"][-1].get("tool_calls"))
@@ -301,19 +325,25 @@ def build_assistant_graph(
     return graph.compile(checkpointer=checkpointer)
 
 
-def system_message() -> dict:
+def system_message(timezone: str | None = None) -> dict:
     today = datetime.now().strftime("%A, %B %-d, %Y")
-    return {"role": "system", "content": f"{SYSTEM_PROMPT} Today is {today}."}
+    content = f"{SYSTEM_PROMPT} Today is {today}."
+    if timezone:
+        content += f" The user's timezone is {timezone}."
+    return {"role": "system", "content": content}
 
 
-def initial_state(history: list[dict], question: str) -> AssistantState:
+def initial_state(
+    history: list[dict], question: str, timezone: str | None = None
+) -> AssistantState:
     return {
         "messages": [
-            system_message(),
+            system_message(timezone),
             *history,
             {"role": "user", "content": question},
         ],
         "sources": [],
+        "widgets": [],
         "needs_documents": True,
         "rounds": 0,
         "elapsed_ms": 0,
