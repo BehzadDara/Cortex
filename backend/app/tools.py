@@ -2,12 +2,14 @@ import ast
 import operator
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models import Chunk, Collection, Conversation, Document, PromptLog
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
@@ -293,8 +295,106 @@ def build_web_search(web_search: WebSearchProvider):
     return search_web
 
 
+def build_kb_stats_tool(session: Session) -> Tool:
+    def kb_stats() -> ToolOutput:
+        counts = {
+            "documents": session.scalar(select(func.count(Document.id))),
+            "chunks": session.scalar(select(func.count(Chunk.id))),
+            "collections": session.scalar(select(func.count(Collection.id))),
+            "conversations": session.scalar(select(func.count(Conversation.id))),
+        }
+        return ToolOutput(
+            text=(
+                f"Knowledge base: {counts['documents']} documents, "
+                f"{counts['chunks']} chunks, {counts['collections']} collections, "
+                f"{counts['conversations']} conversations."
+            ),
+            widget=Widget(kind="kb_stats", data=counts),
+        )
+
+    return Tool(
+        name="kb_stats",
+        description=(
+            "Get the size of the user's knowledge base: how many documents, "
+            "chunks, collections, and conversations it holds."
+        ),
+        parameters={"type": "object", "properties": {}},
+        run=kb_stats,
+    )
+
+
+USAGE_WINDOW_DAYS = 7
+
+
+def build_usage_stats_tool(session: Session) -> Tool:
+    def usage_stats() -> ToolOutput:
+        start = date.today() - timedelta(days=USAGE_WINDOW_DAYS - 1)
+        day = func.date(PromptLog.created_at)
+        rows = session.execute(
+            select(
+                day,
+                func.count(PromptLog.id),
+                func.coalesce(
+                    func.sum(
+                        func.coalesce(PromptLog.prompt_tokens, 0)
+                        + func.coalesce(PromptLog.response_tokens, 0)
+                    ),
+                    0,
+                ),
+            )
+            .where(day >= start)
+            .group_by(day)
+        ).all()
+        by_day = {row[0]: row for row in rows}
+        days = []
+        for offset in range(USAGE_WINDOW_DAYS):
+            current = start + timedelta(days=offset)
+            row = by_day.get(current)
+            days.append(
+                {
+                    "date": current.isoformat(),
+                    "prompts": row[1] if row else 0,
+                    "tokens": int(row[2]) if row else 0,
+                }
+            )
+        total_prompts = sum(entry["prompts"] for entry in days)
+        total_tokens = sum(entry["tokens"] for entry in days)
+        average_latency = session.scalar(
+            select(func.avg(PromptLog.latency_ms)).where(day >= start)
+        )
+        average_latency_ms = int(average_latency) if average_latency else None
+        summary = (
+            f"Cortex usage over the last {USAGE_WINDOW_DAYS} days: "
+            f"{total_prompts} prompts, {total_tokens:,} tokens"
+        )
+        if average_latency_ms is not None:
+            summary += f", average latency {average_latency_ms:,} ms"
+        return ToolOutput(
+            text=summary + ".",
+            widget=Widget(
+                kind="usage",
+                data={
+                    "days": days,
+                    "total_prompts": total_prompts,
+                    "total_tokens": total_tokens,
+                    "average_latency_ms": average_latency_ms,
+                },
+            ),
+        )
+
+    return Tool(
+        name="usage_stats",
+        description=(
+            "Get how much the user has used Cortex over the last week: "
+            "prompts, tokens, and average latency."
+        ),
+        parameters={"type": "object", "properties": {}},
+        run=usage_stats,
+    )
+
+
 def build_tools(
-    weather: WeatherProvider, market_data: MarketDataProvider
+    session: Session, weather: WeatherProvider, market_data: MarketDataProvider
 ) -> list[Tool]:
     return [
         Tool(
@@ -331,4 +431,6 @@ def build_tools(
         ),
         build_weather_tool(weather),
         build_crypto_tool(market_data),
+        build_kb_stats_tool(session),
+        build_usage_stats_tool(session),
     ]

@@ -491,7 +491,7 @@ function PriceChartCard({ data }: { data: Record<string, unknown> }) {
         </svg>
         {hover && (
           <div
-            className="price-tooltip"
+            className="chart-tooltip"
             style={{ left: `${(hover.x / CHART_WIDTH) * 100}%` }}
           >
             {formatMoney(hover.point.p)} · {formatClockTime(hover.point.t)}
@@ -509,6 +509,186 @@ function PriceChartCard({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+interface KbStatsData {
+  documents: number;
+  chunks: number;
+  collections: number;
+  conversations: number;
+}
+
+function KbStatsCard({ data }: { data: Record<string, unknown> }) {
+  const stats = data as unknown as KbStatsData;
+  const tiles: [string, number][] = [
+    ["Documents", stats.documents],
+    ["Chunks", stats.chunks],
+    ["Collections", stats.collections],
+    ["Chats", stats.conversations],
+  ];
+  const summary =
+    `Knowledge base: ${stats.documents} documents, ${stats.chunks} chunks, ` +
+    `${stats.collections} collections, ${stats.conversations} conversations`;
+
+  return (
+    <div className="widget-card stats-card" role="img" aria-label={summary}>
+      <span className="widget-title">Knowledge base</span>
+      <div className="stats-grid">
+        {tiles.map(([label, value]) => (
+          <div key={label} className="stat-tile">
+            <span className="stat-value">{(value ?? 0).toLocaleString()}</span>
+            <span className="stat-label">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface UsageDay {
+  date: string;
+  prompts: number;
+  tokens: number;
+}
+
+interface UsageData {
+  days: UsageDay[];
+  total_prompts: number;
+  total_tokens: number;
+  average_latency_ms: number | null;
+}
+
+function formatTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return value.toLocaleString();
+}
+
+function roundedTopBar(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): string {
+  const radius = Math.min(3, height);
+  return (
+    `M${x},${y + height}V${y + radius}` +
+    `Q${x},${y} ${x + radius},${y}` +
+    `H${x + width - radius}` +
+    `Q${x + width},${y} ${x + width},${y + radius}` +
+    `V${y + height}Z`
+  );
+}
+
+const USAGE_WIDTH = 320;
+const USAGE_HEIGHT = 64;
+const USAGE_TOP_PAD = 4;
+
+function UsageCard({ data }: { data: Record<string, unknown> }) {
+  const usage = data as unknown as UsageData;
+  const [hoverDay, setHoverDay] = useState<number | null>(null);
+  const days = usage.days ?? [];
+  if (days.length === 0) return null;
+
+  const slot = USAGE_WIDTH / days.length;
+  const barWidth = Math.min(26, slot * 0.6);
+  const maxTokens = Math.max(...days.map((day) => day.tokens), 1);
+  const latency =
+    usage.average_latency_ms === null
+      ? null
+      : usage.average_latency_ms >= 1000
+        ? `${(usage.average_latency_ms / 1000).toFixed(1)}s`
+        : `${usage.average_latency_ms}ms`;
+  const summary =
+    `Cortex usage over the last ${days.length} days: ` +
+    `${usage.total_tokens.toLocaleString()} tokens across ` +
+    `${usage.total_prompts.toLocaleString()} prompts`;
+  const hovered = hoverDay === null ? null : days[hoverDay];
+
+  return (
+    <div className="widget-card usage-card">
+      <span className="widget-title">Cortex · Last {days.length} days</span>
+      <div className="usage-hero">
+        <span className="usage-total">{formatTokens(usage.total_tokens)}</span>
+        <span className="widget-subtle">
+          tokens · {usage.total_prompts.toLocaleString()} prompts
+          {latency ? ` · avg ${latency}` : ""}
+        </span>
+      </div>
+      <div className="usage-plot">
+        <svg
+          viewBox={`0 0 ${USAGE_WIDTH} ${USAGE_HEIGHT}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={summary}
+          onPointerLeave={() => setHoverDay(null)}
+        >
+          <line
+            x1="0"
+            x2={USAGE_WIDTH}
+            y1={USAGE_HEIGHT - 0.5}
+            y2={USAGE_HEIGHT - 0.5}
+            stroke="var(--border)"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
+          {days.map((day, index) => {
+            const height = Math.max(
+              (day.tokens / maxTokens) * (USAGE_HEIGHT - USAGE_TOP_PAD - 1),
+              day.tokens > 0 ? 3 : 1.5,
+            );
+            const x = index * slot + (slot - barWidth) / 2;
+            return (
+              <g key={day.date}>
+                <rect
+                  x={index * slot}
+                  y={0}
+                  width={slot}
+                  height={USAGE_HEIGHT}
+                  fill="transparent"
+                  onPointerEnter={() => setHoverDay(index)}
+                />
+                <path
+                  d={roundedTopBar(
+                    x,
+                    USAGE_HEIGHT - 1 - height,
+                    barWidth,
+                    height,
+                  )}
+                  fill={
+                    day.tokens === 0
+                      ? "var(--border)"
+                      : hoverDay === index
+                        ? "var(--primary-hover)"
+                        : "var(--accent)"
+                  }
+                  pointerEvents="none"
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {hovered && hoverDay !== null && (
+          <div
+            className="chart-tooltip"
+            style={{ left: `${((hoverDay + 0.5) / days.length) * 100}%` }}
+          >
+            {hovered.tokens.toLocaleString()} tokens · {hovered.prompts}{" "}
+            {hovered.prompts === 1 ? "prompt" : "prompts"}
+          </div>
+        )}
+      </div>
+      <div className="usage-days">
+        {days.map((day) => (
+          <span key={day.date}>
+            {new Date(`${day.date}T00:00:00`).toLocaleDateString([], {
+              weekday: "short",
+            })}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const WIDGET_COMPONENTS: Record<
   string,
   ComponentType<{ data: Record<string, unknown> }>
@@ -516,6 +696,8 @@ const WIDGET_COMPONENTS: Record<
   clock: ClockCard,
   weather: WeatherCard,
   price_chart: PriceChartCard,
+  kb_stats: KbStatsCard,
+  usage: UsageCard,
 };
 
 export function WidgetCard({ widget }: { widget: Widget }) {

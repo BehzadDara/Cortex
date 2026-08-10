@@ -1123,7 +1123,7 @@ button.citation.active {
   cursor: crosshair;
 }
 
-.price-tooltip {
+.chart-tooltip {
   position: absolute;
   top: -4px;
   transform: translate(-50%, -100%);
@@ -1144,4 +1144,80 @@ button.citation.active {
   font-size: 11px;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
+}
+
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 8px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--background);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.usage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.usage-total {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-plot {
+  position: relative;
+}
+
+.usage-plot svg {
+  display: block;
+  width: 100%;
+  height: 64px;
+}
+
+.usage-days {
+  display: flex;
+}
+
+.usage-days span {
+  flex: 1;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted-foreground);
 }

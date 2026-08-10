@@ -76,6 +76,8 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
   world_clock: { running: "Checking the time", done: "Checked the time" },
   get_weather: { running: "Checking the weather", done: "Checked the weather" },
   crypto_price: { running: "Fetching market prices", done: "Fetched market prices" },
+  kb_stats: { running: "Checking your library", done: "Checked your library" },
+  usage_stats: { running: "Checking usage", done: "Checked usage" },
 };
 
 function stepLabel(step: ToolStep): string {
@@ -210,6 +212,16 @@ function ChartIcon() {
   );
 }
 
+function DatabaseIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+      <path d="M3 12a9 3 0 0 0 18 0" />
+    </svg>
+  );
+}
+
 const STEP_ICONS: Record<string, ComponentType> = {
   search_documents: SearchIcon,
   web_search: GlobeIcon,
@@ -218,6 +230,8 @@ const STEP_ICONS: Record<string, ComponentType> = {
   world_clock: ClockIcon,
   get_weather: CloudIcon,
   crypto_price: ChartIcon,
+  kb_stats: DatabaseIcon,
+  usage_stats: ChartIcon,
 };
 
 function DownloadIcon() {

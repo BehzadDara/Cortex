@@ -17,17 +17,20 @@ Title:"""
 
 ROUTE_PROMPT = """Decide whether the message should first search the user's personal document library. Output exactly one word: yes or no.
 
-Answer no only when the message asks for live or current information (prices, news, weather, sports results), explicitly asks to search the web or look something up online, is pure arithmetic, asks the date or time, or is small talk — including messages that just tell you what to say back, like greetings, jokes, well-wishes, or canned replies.
+Answer no only when the message asks for live or current information (prices, news, weather, sports results), explicitly asks to search the web or look something up online, is pure arithmetic, asks the date or time, asks how many documents, collections, or conversations the library holds, asks about their own usage of this assistant (prompts sent, tokens spent, latency), or is small talk — including messages that just tell you what to say back, like greetings, jokes, well-wishes, or canned replies.
 Otherwise answer yes — general knowledge and how-to questions count as yes, because the documents may cover them.
 
 Message: What is the capital of France? -> yes
 Message: How do I brew green tea? -> yes
 Message: Explain how our billing service works. -> yes
 Message: Tell me what my notes say about tea. -> yes
+Message: Reply with the chunk size our backend uses. -> yes
 Message: What is the current price of gold? -> no
 Message: Search the web for the latest Python release. -> no
 Message: Who won the match last night? -> no
 Message: What is 25 * 16? -> no
+Message: How many documents are in my library? -> no
+Message: How many tokens did I use yesterday? -> no
 Message: hey there -> no
 Message: Say good morning to me. -> no
 

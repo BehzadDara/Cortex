@@ -63,7 +63,7 @@ def build_graph(
     weather: WeatherProvider,
     market_data: MarketDataProvider,
 ):
-    tools = build_tools(weather, market_data)
+    tools = build_tools(session, weather, market_data)
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
     search_web = build_web_search(web_search)
     return build_assistant_graph(
