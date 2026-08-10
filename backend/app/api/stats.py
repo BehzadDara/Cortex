@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_session
-from app.models import Chunk, Collection, Conversation, Document, PromptLog
+from app.models import Chunk, Collection, Conversation, Document, Message, PromptLog
 from app.schemas import PromptLogResponse, StatsResponse
 
 router = APIRouter(tags=["stats"])
@@ -17,6 +17,12 @@ def stats(session: Session = Depends(get_session)) -> StatsResponse:
         collections=session.scalar(select(func.count(Collection.id))),
         conversations=session.scalar(select(func.count(Conversation.id))),
         prompts=session.scalar(select(func.count(PromptLog.id))),
+        likes=session.scalar(
+            select(func.count(Message.id)).where(Message.feedback == "like")
+        ),
+        dislikes=session.scalar(
+            select(func.count(Message.id)).where(Message.feedback == "dislike")
+        ),
         average_latency_ms=session.scalar(select(func.avg(PromptLog.latency_ms))),
         total_prompt_tokens=session.scalar(
             select(func.coalesce(func.sum(PromptLog.prompt_tokens), 0))

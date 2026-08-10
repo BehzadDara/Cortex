@@ -21,6 +21,7 @@ Cortex is built in ordered steps. Each step ends with something runnable and dem
 - [x] **15. Production hardening** — Background jobs for crawl/repository indexing with status polling. API key auth and rate limiting were built, then removed for the single-user local setup; they return with deployment or multi-user support.
 - [x] **16. LangGraph orchestration** — Agent rebuilt as a `StateGraph` with parallel retrieval fan-out, measured against the hand-rolled pipeline, then Chat + Agent merged into one streaming `/assistant` (model ⇄ tools cycle with live tool-step events). Postgres checkpointing makes runs resumable; `interrupt()` adds human-in-the-loop approval for web searches. Finally Ask folded in too: an always-first `retrieve` node seeds the loop with grounded context, leaving a single conversation surface; the chat collection filter was removed with it.
 - [x] **17. Rich answers** — Mermaid diagrams rendered to downloadable SVG. Tools with visual payloads render as live widget cards, persisted on the message for replay: world clock, weather (Open-Meteo), 24h crypto chart (CoinGecko), plus Cortex-internal knowledge-base stats and 7-day usage. The router judges follow-ups with the previous question attached — 100% on the routing set, now 38 questions.
+- [x] **18. Answer feedback** — Like/dislike on every assistant answer: one vote per message, editable and clearable (last state wins), persisted and replayed with the chat; totals on the dashboard. The run's persisted message id now streams back as a `saved` event before `done`.
 
 ## Principles
 

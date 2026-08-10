@@ -91,6 +91,7 @@ class Message(Base):
     steps: Mapped[list | None] = mapped_column(JSONB)
     sources: Mapped[list | None] = mapped_column(JSONB)
     widgets: Mapped[list | None] = mapped_column(JSONB)
+    feedback: Mapped[str | None]
     elapsed_ms: Mapped[int | None]
     prompt_tokens: Mapped[int | None]
     response_tokens: Mapped[int | None]

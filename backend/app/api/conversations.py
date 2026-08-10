@@ -82,11 +82,13 @@ def get_conversation(
         active_thread=conversation.active_thread,
         messages=[
             MessageResponse(
+                id=message.id,
                 role=message.role,
                 content=message.content,
                 steps=message.steps,
                 sources=message.sources,
                 widgets=message.widgets,
+                feedback=message.feedback,
                 elapsed_ms=message.elapsed_ms,
                 prompt_tokens=message.prompt_tokens,
                 response_tokens=message.response_tokens,

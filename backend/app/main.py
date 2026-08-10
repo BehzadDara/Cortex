@@ -10,6 +10,7 @@ from app.api import (
     conversations,
     documents,
     jobs,
+    messages,
     stats,
     vision,
 )
@@ -28,6 +29,7 @@ app = FastAPI(title="Cortex", lifespan=lifespan)
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)
+app.include_router(messages.router)
 app.include_router(assistant.router)
 app.include_router(vision.router)
 app.include_router(stats.router)

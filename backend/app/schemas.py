@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -80,6 +81,8 @@ class StatsResponse(BaseModel):
     collections: int
     conversations: int
     prompts: int
+    likes: int
+    dislikes: int
     average_latency_ms: float | None
     total_prompt_tokens: int
     total_response_tokens: int
@@ -115,14 +118,25 @@ class WidgetPayload(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    id: int
     role: str
     content: str
     steps: list[ToolStep] | None = None
     sources: list[SourceRef] | None = None
     widgets: list[WidgetPayload] | None = None
+    feedback: Literal["like", "dislike"] | None = None
     elapsed_ms: int | None = None
     prompt_tokens: int | None = None
     response_tokens: int | None = None
+
+
+class FeedbackRequest(BaseModel):
+    value: Literal["like", "dislike"] | None
+
+
+class FeedbackResponse(BaseModel):
+    id: int
+    feedback: Literal["like", "dislike"] | None
 
 
 class ConversationSummary(BaseModel):

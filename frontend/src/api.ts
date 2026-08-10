@@ -3,6 +3,7 @@ import type {
   ConversationDetail,
   ConversationSummary,
   Doc,
+  Feedback,
   ImageAnswer,
   Job,
   PromptLog,
@@ -118,6 +119,12 @@ export async function askImage(
   return response.json();
 }
 
+export const submitFeedback = (messageId: number, value: Feedback | null) =>
+  request<{ id: number; feedback: Feedback | null }>(
+    `/messages/${messageId}/feedback`,
+    jsonInit("PUT", { value }),
+  );
+
 export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);
@@ -131,6 +138,7 @@ export interface StreamHandlers {
   onSources?: (sources: Source[]) => void;
   onWidget?: (widget: Widget) => void;
   onUsage?: (usage: Usage) => void;
+  onSaved?: (messageId: number) => void;
   onSnapshot?: (
     question: string,
     steps: ToolStep[],
@@ -184,6 +192,7 @@ async function streamEvents(
           prompt_tokens: event.prompt_tokens,
           response_tokens: event.response_tokens,
         });
+      else if (event.type === "saved") handlers.onSaved?.(event.message_id);
       else if (event.type === "snapshot")
         handlers.onSnapshot?.(
           event.question,

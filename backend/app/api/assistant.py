@@ -36,7 +36,11 @@ from app.dependencies import (
     get_web_search,
 )
 from app.models import Conversation, PromptLog
-from app.rag.conversation import conversation_messages, save_exchange
+from app.rag.conversation import (
+    conversation_messages,
+    save_exchange,
+    summarize_if_due,
+)
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.llm import LLMProvider
 from app.rag.market_data import MarketDataProvider
@@ -173,24 +177,12 @@ def stream_events(
                 "response_tokens": usage.response_tokens,
             }
         )
-    yield sse_event({"type": "done"})
-
-    if final_state is not None:
         question = state_question(final_state)
         answer = final_answer(final_state)
-        save_prompt_log(
-            question,
-            format_transcript(final_state["messages"]),
-            answer,
-            started,
-            usage.prompt_tokens,
-            usage.response_tokens,
-        )
-        save_exchange(
+        message_id = save_exchange(
             conversation_id,
             question,
             answer,
-            llm,
             steps=extract_steps(final_state["messages"]),
             sources=final_state.get("sources"),
             widgets=final_state.get("widgets"),
@@ -199,6 +191,19 @@ def stream_events(
             response_tokens=usage.response_tokens,
         )
         clear_active_thread(conversation_id)
+        yield sse_event({"type": "saved", "message_id": message_id})
+    yield sse_event({"type": "done"})
+
+    if final_state is not None:
+        save_prompt_log(
+            question,
+            format_transcript(final_state["messages"]),
+            answer,
+            started,
+            usage.prompt_tokens,
+            usage.response_tokens,
+        )
+        summarize_if_due(conversation_id, llm)
 
 
 @router.post("/assistant")

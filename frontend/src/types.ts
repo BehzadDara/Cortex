@@ -44,16 +44,20 @@ export interface Widget {
   data: Record<string, unknown>;
 }
 
+export type Feedback = "like" | "dislike";
+
 export interface ConversationDetail {
   id: number;
   summary: string | null;
   active_thread: string | null;
   messages: {
+    id: number;
     role: string;
     content: string;
     steps: ToolStep[] | null;
     sources: Source[] | null;
     widgets: Widget[] | null;
+    feedback: Feedback | null;
     elapsed_ms: number | null;
     prompt_tokens: number | null;
     response_tokens: number | null;
@@ -80,6 +84,8 @@ export interface Stats {
   collections: number;
   conversations: number;
   prompts: number;
+  likes: number;
+  dislikes: number;
   average_latency_ms: number | null;
   total_prompt_tokens: number;
   total_response_tokens: number;

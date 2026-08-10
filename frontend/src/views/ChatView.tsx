@@ -17,8 +17,16 @@ import {
   renameConversation,
   resumeAssistant,
   streamAssistant,
+  submitFeedback,
 } from "../api";
-import type { ConversationSummary, Source, ToolStep, Usage, Widget } from "../types";
+import type {
+  ConversationSummary,
+  Feedback,
+  Source,
+  ToolStep,
+  Usage,
+  Widget,
+} from "../types";
 import { WidgetList } from "./ChatWidgets";
 
 interface Attachment {
@@ -33,6 +41,7 @@ interface Approval {
 }
 
 interface ChatMessage {
+  id?: number;
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
@@ -42,6 +51,7 @@ interface ChatMessage {
   widgets?: Widget[];
   approval?: Approval;
   usage?: Usage;
+  feedback?: Feedback | null;
 }
 
 function formatDuration(ms: number): string {
@@ -393,25 +403,102 @@ function AnswerBody({
   );
 }
 
-function UsageMeta({ usage }: { usage: Usage }) {
+function ThumbUpIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 10v12" />
+      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+    </svg>
+  );
+}
+
+function ThumbDownIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17 14V2" />
+      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
+    </svg>
+  );
+}
+
+function FeedbackControl({
+  messageId,
+  feedback,
+  onChange,
+}: {
+  messageId: number;
+  feedback: Feedback | null;
+  onChange: (value: Feedback | null) => void;
+}) {
+  async function vote(value: Feedback) {
+    const next = feedback === value ? null : value;
+    const previous = feedback;
+    onChange(next);
+    try {
+      await submitFeedback(messageId, next);
+    } catch {
+      onChange(previous);
+    }
+  }
+
+  function thumbClass(value: Feedback): string {
+    return feedback === value
+      ? `feedback-button ${value} selected`
+      : `feedback-button ${value}`;
+  }
+
+  return (
+    <span className="feedback" role="group" aria-label="Rate this answer">
+      <button
+        className={thumbClass("like")}
+        aria-label="Good answer"
+        aria-pressed={feedback === "like"}
+        title={feedback === "like" ? "Remove rating" : "Good answer"}
+        onClick={() => vote("like")}
+      >
+        <ThumbUpIcon />
+      </button>
+      <button
+        className={thumbClass("dislike")}
+        aria-label="Bad answer"
+        aria-pressed={feedback === "dislike"}
+        title={feedback === "dislike" ? "Remove rating" : "Bad answer"}
+        onClick={() => vote("dislike")}
+      >
+        <ThumbDownIcon />
+      </button>
+    </span>
+  );
+}
+
+function UsageMeta({ usage, feedback }: { usage?: Usage; feedback?: ReactNode }) {
   return (
     <div className="message-meta">
-      {usage.elapsed_ms !== null && (
-        <span className="meta-item" title="Response time">
-          <ClockIcon />
-          <span className="meta-value">{formatDuration(usage.elapsed_ms)}</span>
-        </span>
+      {usage && (
+        <>
+          {usage.elapsed_ms !== null && (
+            <span className="meta-item" title="Response time">
+              <ClockIcon />
+              <span className="meta-value">{formatDuration(usage.elapsed_ms)}</span>
+            </span>
+          )}
+          <span className="meta-item" title="Prompt tokens">
+            <ArrowDownIcon />
+            <span className="meta-value">
+              {usage.prompt_tokens.toLocaleString()}
+            </span>
+            <span className="meta-label">prompt</span>
+          </span>
+          <span className="meta-item" title="Response tokens">
+            <ArrowUpIcon />
+            <span className="meta-value">
+              {usage.response_tokens.toLocaleString()}
+            </span>
+            <span className="meta-label">response</span>
+          </span>
+        </>
       )}
-      <span className="meta-item" title="Prompt tokens">
-        <ArrowDownIcon />
-        <span className="meta-value">{usage.prompt_tokens.toLocaleString()}</span>
-        <span className="meta-label">prompt</span>
-      </span>
-      <span className="meta-item" title="Response tokens">
-        <ArrowUpIcon />
-        <span className="meta-value">{usage.response_tokens.toLocaleString()}</span>
-        <span className="meta-label">response</span>
-      </span>
+      {feedback}
     </div>
   );
 }
@@ -522,12 +609,14 @@ export default function ChatView() {
               ? parseStoredContent(message.content)
               : { content: message.content };
           return {
+            id: message.id,
             role: message.role === "user" ? ("user" as const) : ("assistant" as const),
             content: parsed.content,
             attachment: parsed.attachment,
             steps: message.steps ?? undefined,
             sources: message.sources ?? undefined,
             widgets: message.widgets ?? undefined,
+            feedback: message.feedback,
             usage:
               message.prompt_tokens !== null && message.response_tokens !== null
                 ? {
@@ -658,6 +747,18 @@ export default function ChatView() {
     updateLastMessage((last) => ({ ...last, usage }));
   }
 
+  function applySavedId(messageId: number) {
+    updateLastMessage((last) => ({ ...last, id: messageId }));
+  }
+
+  function setMessageFeedback(index: number, feedback: Feedback | null) {
+    setMessages((current) =>
+      current.map((message, position) =>
+        position === index ? { ...message, feedback } : message,
+      ),
+    );
+  }
+
   const assistantHandlers = (firstQuestion: string) => ({
     onConversation: (created: number) => adoptConversation(created, firstQuestion),
     onToken: appendAssistantToken,
@@ -667,6 +768,7 @@ export default function ChatView() {
     onSources: addSources,
     onWidget: addWidget,
     onUsage: applyUsage,
+    onSaved: applySavedId,
     onApproval: requestApproval,
   });
 
@@ -917,9 +1019,23 @@ export default function ChatView() {
                 ) : (
                   message.content
                 )}
-                {message.usage && !message.pending && !message.approval && (
-                  <UsageMeta usage={message.usage} />
-                )}
+                {message.role === "assistant" &&
+                  !message.pending &&
+                  !message.approval &&
+                  (message.usage || message.id !== undefined) && (
+                    <UsageMeta
+                      usage={message.usage}
+                      feedback={
+                        message.id !== undefined ? (
+                          <FeedbackControl
+                            messageId={message.id}
+                            feedback={message.feedback ?? null}
+                            onChange={(value) => setMessageFeedback(index, value)}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  )}
                 </div>
               </div>
             ))}

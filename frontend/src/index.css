@@ -560,6 +560,50 @@ tbody tr:hover {
   color: var(--muted-foreground);
 }
 
+.feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+button.feedback-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    opacity 200ms ease;
+}
+
+button.feedback-button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+button.feedback-button.selected svg {
+  fill: currentColor;
+}
+
+button.feedback-button.like.selected {
+  color: var(--ok);
+}
+
+button.feedback-button.dislike.selected {
+  color: var(--destructive);
+}
+
 .thinking {
   color: var(--muted-foreground);
 }

@@ -53,34 +53,40 @@ def save_exchange(
     conversation_id: int,
     question: str,
     answer: str,
-    llm: LLMProvider,
     steps: list[dict] | None = None,
     sources: list[dict] | None = None,
     widgets: list[dict] | None = None,
     elapsed_ms: int | None = None,
     prompt_tokens: int | None = None,
     response_tokens: int | None = None,
-) -> None:
+) -> int:
     with SessionLocal() as session:
-        conversation = session.get(Conversation, conversation_id)
+        assistant_message = Message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=answer,
+            steps=steps or None,
+            sources=sources or None,
+            widgets=widgets or None,
+            elapsed_ms=elapsed_ms,
+            prompt_tokens=prompt_tokens,
+            response_tokens=response_tokens,
+        )
         session.add_all(
             [
                 Message(conversation_id=conversation_id, role="user", content=question),
-                Message(
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=answer,
-                    steps=steps or None,
-                    sources=sources or None,
-                    widgets=widgets or None,
-                    elapsed_ms=elapsed_ms,
-                    prompt_tokens=prompt_tokens,
-                    response_tokens=response_tokens,
-                ),
+                assistant_message,
             ]
         )
         session.commit()
-        maybe_summarize(session, llm, conversation)
+        return assistant_message.id
+
+
+def summarize_if_due(conversation_id: int, llm: LLMProvider) -> None:
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        if conversation is not None:
+            maybe_summarize(session, llm, conversation)
 
 
 def maybe_summarize(

@@ -20,6 +20,8 @@ export default function DashboardView() {
         { label: "Collections", value: stats.collections },
         { label: "Conversations", value: stats.conversations },
         { label: "Prompts", value: stats.prompts },
+        { label: "Liked", value: stats.likes },
+        { label: "Disliked", value: stats.dislikes },
         {
           label: "Avg latency",
           value: stats.average_latency_ms
