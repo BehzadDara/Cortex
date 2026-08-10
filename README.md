@@ -8,7 +8,7 @@ It is also a learning project: it started as the simplest possible RAG applicati
 
 ## Highlights
 
-- **One assistant** — every question runs a guaranteed document search first, then the model decides: answer directly, decompose into focused searches, or reach for the web (with your approval), a calculator, or the clock. Each step streams live and is replayable from history.
+- **One assistant** — every question runs a guaranteed document search first, then the model decides: answer directly, decompose into focused searches, or reach for the web (with your approval), a calculator, the world clock, live weather, or crypto prices — visual tools render as widget cards, and Cortex can report on its own knowledge base and usage. Each step streams live and is replayable from history.
 - **Measured retrieval** — hybrid search (vector + full-text, reciprocal rank fusion) plus cross-encoder re-ranking, tuned against a golden eval set: 100% hit@1, MRR 1.000 on the current corpus.
 - **Everything local** — Ollama for LLM, embeddings, and vision; Qdrant for vectors; PostgreSQL as the source of truth. No API keys, no cloud.
 - **Everything replaceable** — LLM, embeddings, vector store, parsers, reranker, and web search all sit behind interfaces; swapping a provider touches one file.
