@@ -154,4 +154,7 @@ class ConversationResponse(BaseModel):
     id: int
     summary: str | None
     active_thread: str | None
+    branched_from_id: int | None
+    branched_from_title: str | None
+    branched_count: int | None
     messages: list[MessageResponse]

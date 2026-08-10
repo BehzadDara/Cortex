@@ -125,6 +125,11 @@ export const submitFeedback = (messageId: number, value: Feedback | null) =>
     jsonInit("PUT", { value }),
   );
 
+export const branchConversation = (messageId: number) =>
+  request<ConversationSummary>(`/messages/${messageId}/branch`, {
+    method: "POST",
+  });
+
 export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);

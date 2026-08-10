@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import {
   askImage,
+  branchConversation,
   continueAssistant,
   deleteConversation,
   getConversation,
@@ -38,6 +40,12 @@ interface Approval {
   name: string;
   arguments: Record<string, unknown>;
   thread: string;
+}
+
+interface BranchOrigin {
+  fromId: number | null;
+  title: string | null;
+  count: number;
 }
 
 interface ChatMessage {
@@ -403,6 +411,17 @@ function AnswerBody({
   );
 }
 
+function BranchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="6" x2="6" y1="3" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </svg>
+  );
+}
+
 function ThumbUpIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -443,26 +462,26 @@ function FeedbackControl({
 
   function thumbClass(value: Feedback): string {
     return feedback === value
-      ? `feedback-button ${value} selected`
-      : `feedback-button ${value}`;
+      ? `meta-button ${value} selected`
+      : `meta-button ${value}`;
   }
 
   return (
     <span className="feedback" role="group" aria-label="Rate this answer">
       <button
         className={thumbClass("like")}
-        aria-label="Good answer"
+        aria-label="Like"
         aria-pressed={feedback === "like"}
-        title={feedback === "like" ? "Remove rating" : "Good answer"}
+        data-tip={feedback === "like" ? "Remove like" : "Like"}
         onClick={() => vote("like")}
       >
         <ThumbUpIcon />
       </button>
       <button
         className={thumbClass("dislike")}
-        aria-label="Bad answer"
+        aria-label="Dislike"
         aria-pressed={feedback === "dislike"}
-        title={feedback === "dislike" ? "Remove rating" : "Bad answer"}
+        data-tip={feedback === "dislike" ? "Remove dislike" : "Dislike"}
         onClick={() => vote("dislike")}
       >
         <ThumbDownIcon />
@@ -471,7 +490,7 @@ function FeedbackControl({
   );
 }
 
-function UsageMeta({ usage, feedback }: { usage?: Usage; feedback?: ReactNode }) {
+function UsageMeta({ usage, actions }: { usage?: Usage; actions?: ReactNode }) {
   return (
     <div className="message-meta">
       {usage && (
@@ -498,7 +517,7 @@ function UsageMeta({ usage, feedback }: { usage?: Usage; feedback?: ReactNode })
           </span>
         </>
       )}
-      {feedback}
+      {actions}
     </div>
   );
 }
@@ -550,6 +569,7 @@ export default function ChatView() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [branch, setBranch] = useState<BranchOrigin | null>(null);
   const [question, setQuestion] = useState("");
   const [attachedImage, setAttachedImage] = useState<File | null>(null);
   const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
@@ -586,6 +606,7 @@ export default function ChatView() {
       abortActiveStream();
       setConversationId(null);
       setMessages([]);
+      setBranch(null);
       setError(null);
     } else if (routeId !== conversationId) {
       abortActiveStream();
@@ -602,6 +623,15 @@ export default function ChatView() {
       const conversation = await getConversation(target);
       setConversationId(target);
       setError(null);
+      setBranch(
+        conversation.branched_count !== null
+          ? {
+              fromId: conversation.branched_from_id,
+              title: conversation.branched_from_title,
+              count: conversation.branched_count,
+            }
+          : null,
+      );
       setMessages(
         conversation.messages.map((message) => {
           const parsed =
@@ -757,6 +787,16 @@ export default function ChatView() {
         position === index ? { ...message, feedback } : message,
       ),
     );
+  }
+
+  async function branchAt(messageId: number) {
+    try {
+      const created = await branchConversation(messageId);
+      refreshConversations();
+      navigate(`/chats/${created.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
   }
 
   const assistantHandlers = (firstQuestion: string) => ({
@@ -968,7 +1008,8 @@ export default function ChatView() {
               </div>
             )}
             {messages.map((message, index) => (
-              <div key={index} className={`message-group ${message.role}`}>
+              <Fragment key={index}>
+              <div className={`message-group ${message.role}`}>
                 {message.attachment && (
                   <AttachmentCard attachment={message.attachment} />
                 )}
@@ -1025,19 +1066,47 @@ export default function ChatView() {
                   (message.usage || message.id !== undefined) && (
                     <UsageMeta
                       usage={message.usage}
-                      feedback={
+                      actions={
                         message.id !== undefined ? (
-                          <FeedbackControl
-                            messageId={message.id}
-                            feedback={message.feedback ?? null}
-                            onChange={(value) => setMessageFeedback(index, value)}
-                          />
+                          <span className="meta-actions">
+                            <button
+                              className="meta-button"
+                              aria-label="Create new branch"
+                              data-tip="Create new branch"
+                              onClick={() => branchAt(message.id!)}
+                            >
+                              <BranchIcon />
+                            </button>
+                            <FeedbackControl
+                              messageId={message.id}
+                              feedback={message.feedback ?? null}
+                              onChange={(value) => setMessageFeedback(index, value)}
+                            />
+                          </span>
                         ) : undefined
                       }
                     />
                   )}
                 </div>
               </div>
+              {branch && index === branch.count - 1 && (
+                <div className="branch-divider">
+                  <span>
+                    Branched from{" "}
+                    {branch.fromId !== null ? (
+                      <button
+                        className="branch-link"
+                        onClick={() => navigate(`/chats/${branch.fromId}`)}
+                      >
+                        {branch.title}
+                      </button>
+                    ) : (
+                      "a deleted chat"
+                    )}
+                  </span>
+                </div>
+              )}
+              </Fragment>
             ))}
             <div ref={bottom} />
           </div>

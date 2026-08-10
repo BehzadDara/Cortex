@@ -50,6 +50,9 @@ export interface ConversationDetail {
   id: number;
   summary: string | null;
   active_thread: string | null;
+  branched_from_id: number | null;
+  branched_from_title: string | null;
+  branched_count: number | null;
   messages: {
     id: number;
     role: string;

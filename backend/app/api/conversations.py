@@ -76,10 +76,20 @@ def get_conversation(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    source = (
+        session.get(Conversation, conversation.branched_from_id)
+        if conversation.branched_from_id is not None
+        else None
+    )
     return ConversationResponse(
         id=conversation.id,
         summary=conversation.summary,
         active_thread=conversation.active_thread,
+        branched_from_id=conversation.branched_from_id,
+        branched_from_title=(
+            (source.title or fallback_title(source)) if source else None
+        ),
+        branched_count=conversation.branched_count,
         messages=[
             MessageResponse(
                 id=message.id,

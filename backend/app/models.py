@@ -70,6 +70,10 @@ class Conversation(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     summarized_count: Mapped[int] = mapped_column(default=0)
     active_thread: Mapped[str | None]
+    branched_from_id: Mapped[int | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL")
+    )
+    branched_count: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
