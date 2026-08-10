@@ -17,7 +17,7 @@ def main() -> None:
     needless_searches = []
     started = time.perf_counter()
     for item in items:
-        decision = decide_route(fast_llm, item["question"])
+        decision = decide_route(fast_llm, item["question"], item.get("previous"))
         if decision == item["needs_documents"]:
             correct += 1
         elif item["needs_documents"]:

@@ -33,5 +33,8 @@
   { "question": "How's the weather in Tehran?", "needs_documents": false },
   { "question": "Show me the last 24 hours of the bitcoin price.", "needs_documents": false },
   { "question": "How many documents do I have?", "needs_documents": false },
-  { "question": "How much have I used Cortex this week?", "needs_documents": false }
+  { "question": "How much have I used Cortex this week?", "needs_documents": false },
+  { "question": "now for Etherium", "previous": "show me the last 24 hours of the bitcoin price", "needs_documents": false },
+  { "question": "And in Berlin?", "previous": "How's the weather in Tehran?", "needs_documents": false },
+  { "question": "What about oolong?", "previous": "What temperature should green tea be brewed at?", "needs_documents": true }
 ]

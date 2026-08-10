@@ -25,7 +25,9 @@ Message: How do I brew green tea? -> yes
 Message: Explain how our billing service works. -> yes
 Message: Tell me what my notes say about tea. -> yes
 Message: Reply with the chunk size our backend uses. -> yes
+Message: And how about black tea? (follow-up to: Tell me what my notes say about tea.) -> yes
 Message: What is the current price of gold? -> no
+Message: And for silver? (follow-up to: What is the current price of gold?) -> no
 Message: Search the web for the latest Python release. -> no
 Message: Who won the match last night? -> no
 Message: What is 25 * 16? -> no
@@ -50,8 +52,14 @@ def build_title_prompt(question: str) -> str:
     return TITLE_PROMPT.format(question=question)
 
 
-def build_route_prompt(question: str) -> str:
-    return ROUTE_PROMPT.format(question=question)
+FOLLOW_UP_CONTEXT_CHARS = 200
+
+
+def build_route_prompt(question: str, previous: str | None = None) -> str:
+    message = question
+    if previous:
+        message = f"{question} (follow-up to: {previous[:FOLLOW_UP_CONTEXT_CHARS]})"
+    return ROUTE_PROMPT.format(question=message)
 
 
 def build_answer_prompt(

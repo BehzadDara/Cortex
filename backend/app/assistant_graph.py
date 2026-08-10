@@ -29,6 +29,9 @@ SYSTEM_PROMPT = (
     "into sub-topics and run one focused search_documents call per sub-topic "
     "before anything else, and only use web_search when those also come back "
     "empty. "
+    "If a dedicated tool covers the question — time, weather, crypto prices, "
+    "library or usage statistics — call that tool instead of searching "
+    "further. "
     "If the message is just small talk or tells you what to say back, answer "
     "it directly and never search for it. The same applies when the message "
     "itself already contains everything needed to answer. "
@@ -154,9 +157,11 @@ def format_sources(sources: list[dict], empty_message: str) -> str:
     return "\n\n---\n\n".join(format_source(source) for source in sources)
 
 
-def decide_route(fast_llm: LLMProvider, question: str) -> bool:
+def decide_route(
+    fast_llm: LLMProvider, question: str, previous: str | None = None
+) -> bool:
     try:
-        decision = fast_llm.complete(build_route_prompt(question))
+        decision = fast_llm.complete(build_route_prompt(question, previous))
     except Exception:
         return True
     return not decision.strip().lower().startswith("no")
@@ -203,7 +208,11 @@ def build_assistant_graph(
         )
 
     def route(state: AssistantState) -> dict:
-        return {"needs_documents": decide_route(fast_llm, state_question(state))}
+        return {
+            "needs_documents": decide_route(
+                fast_llm, state_question(state), previous_question(state)
+            )
+        }
 
     def after_route(state: AssistantState) -> str:
         return "retrieve" if state["needs_documents"] else "model"
@@ -386,6 +395,15 @@ def state_question(state: AssistantState) -> str:
         for message in reversed(state["messages"])
         if message.get("role") == "user"
     )
+
+
+def previous_question(state: AssistantState) -> str | None:
+    questions = [
+        message["content"]
+        for message in state["messages"]
+        if message.get("role") == "user"
+    ]
+    return questions[-2] if len(questions) > 1 else None
 
 
 def extract_steps(messages: list[dict]) -> list[dict]:
