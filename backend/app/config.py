@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:4b"
     fast_llm_model: str = "gemma3:4b"
     vision_model: str = "gemma3:4b"
-    image_provider: str = "pollinations"
-    image_model: str = "x/z-image-turbo"
     image_size: int = 768
     image_dir: str = str(BACKEND_ROOT / "generated_images")
     ocr_max_pages: int = 5

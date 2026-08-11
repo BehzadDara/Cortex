@@ -20,4 +20,4 @@ Local-first AI knowledge assistant. A learning project that starts as minimal RA
 
 ## Stack
 
-Python + FastAPI, PostgreSQL for relational data, Qdrant for vectors, Ollama (qwen3:4b for answers, gemma3:4b for titles and vision, nomic-embed-text for embeddings), Pollinations (free keyless API) for image generation — a local Ollama implementation (x/z-image-turbo, needs Ollama 0.32.5) sits behind the same abstraction as an alternative — LangGraph for assistant orchestration only, React + Vite for the frontend. Redis and MinIO are deliberately absent until a feature needs them.
+Python + FastAPI, PostgreSQL for relational data, Qdrant for vectors, Ollama (qwen3:4b for answers, gemma3:4b for titles and vision, nomic-embed-text for embeddings), Pollinations (free keyless API) for image generation, LangGraph for assistant orchestration only, React + Vite for the frontend. Redis and MinIO are deliberately absent until a feature needs them.

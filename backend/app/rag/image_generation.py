@@ -1,5 +1,3 @@
-import json
-from base64 import b64decode
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import quote
@@ -51,36 +49,3 @@ class PollinationsImageGenerator:
             width=settings.image_size,
             height=settings.image_size,
         )
-
-
-class OllamaImageGenerator:
-    def __init__(self, model: str | None = None) -> None:
-        self.model = model or settings.image_model
-
-    def generate(self, prompt: str) -> GeneratedImage:
-        request = {
-            "model": self.model,
-            "prompt": prompt,
-            "width": settings.image_size,
-            "height": settings.image_size,
-            "stream": True,
-        }
-        with httpx.stream(
-            "POST",
-            f"{settings.ollama_url}/api/generate",
-            json=request,
-            timeout=GENERATION_TIMEOUT_SECONDS,
-        ) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                part = json.loads(line)
-                if part.get("error"):
-                    raise RuntimeError(f"Image generation failed: {part['error']}")
-                if part.get("image"):
-                    return GeneratedImage(
-                        data=b64decode(part["image"]),
-                        extension="png",
-                        width=settings.image_size,
-                        height=settings.image_size,
-                    )
-        raise RuntimeError("The image model finished without returning an image")

@@ -43,7 +43,7 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **Vision** — Images (`.png`, `.jpg`) are parsed by a local vision model that transcribes text and describes figures; the transcription then flows through the normal chunk → embed → index pipeline. PDFs without a text layer (scans) are rendered page by page and OCR'd the same way, capped at `ocr_max_pages`. `/ask-image` answers a question about an uploaded image directly, without indexing it.
 
-**Image generation** — The `generate_image` tool creates images from text through the `ImageGenerator` abstraction. The default implementation calls Pollinations.ai, a free, keyless image API — the one deliberate exception to local-first, made after local diffusion proved too heavy next to the chat models on a 24 GB machine (see DECISIONS.md); only the draw-prompt leaves the machine, never documents or questions. `IMAGE_PROVIDER=ollama` switches to the local implementation, which drives Ollama's experimental image API (`x/z-image-turbo`, requires Ollama 0.32.5 — later releases temporarily removed it). The returned image is written to `backend/generated_images/` and served by a static mount at `/images/{filename}`; the widget persisted on the message stores only the filename, keeping conversation payloads light. Diagrams stay with mermaid — the system prompt reserves `generate_image` for pictures, photos, artwork, and illustrations.
+**Image generation** — The `generate_image` tool creates images from text through the `ImageGenerator` abstraction. The implementation calls Pollinations.ai, a free, keyless image API — the one deliberate exception to local-first, made after local diffusion proved too heavy next to the chat models on a 24 GB machine (see DECISIONS.md); only the draw-prompt leaves the machine, never documents or questions. The returned image is written to `backend/generated_images/` and served by a static mount at `/images/{filename}`; the widget persisted on the message stores only the filename, keeping conversation payloads light. Diagrams stay with mermaid — the system prompt reserves `generate_image` for pictures, photos, artwork, and illustrations.
 
 Three earlier endpoints — `/ask` (the fixed RAG pipeline), `/chat` (a hand-rolled tool loop), and `/agent` (a hardcoded planner → retriever → reasoner pipeline, later rebuilt as a LangGraph fan-out graph) — were folded into the assistant and retired; DECISIONS.md records the comparisons. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
 
@@ -64,7 +64,7 @@ Business logic depends on interfaces only. Each concrete provider is one impleme
 | `WeatherProvider`   | Open-Meteo                | Any weather API              |
 | `MarketDataProvider`| CoinGecko                 | Any market data API          |
 | `Reranker`          | ms-marco cross-encoder    | Any cross-encoder or API     |
-| `ImageGenerator`    | Pollinations (free API)   | Ollama (x/z-image-turbo), ComfyUI, any diffusion API |
+| `ImageGenerator`    | Pollinations (free API)   | Local diffusion, ComfyUI, any image API |
 
 LangGraph sits outside this table on purpose: it orchestrates control flow (the assistant's model ⇄ tools cycle, checkpointing, interrupts) but never talks to a model or database itself — swapping any provider still touches one file.
 
