@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.rag.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
+from app.rag.image_generation import (
+    ImageGenerator,
+    OllamaImageGenerator,
+    PollinationsImageGenerator,
+)
 from app.rag.llm import LLMProvider, OllamaLLMProvider
 from app.rag.market_data import CoinGeckoMarketData, MarketDataProvider
 from app.rag.reranking import CrossEncoderReranker, Reranker
@@ -48,6 +53,13 @@ def get_reranker() -> Reranker:
 @lru_cache
 def get_vision_provider() -> VisionProvider:
     return OllamaVisionProvider()
+
+
+@lru_cache
+def get_image_generator() -> ImageGenerator:
+    if settings.image_provider == "ollama":
+        return OllamaImageGenerator()
+    return PollinationsImageGenerator()
 
 
 @lru_cache

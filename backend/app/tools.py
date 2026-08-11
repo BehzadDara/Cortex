@@ -3,6 +3,8 @@ import operator
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
+from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, select
@@ -11,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Chunk, Collection, Conversation, Document, PromptLog
 from app.rag.embeddings import EmbeddingProvider
+from app.rag.image_generation import GeneratedImage, ImageGenerator
 from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
@@ -223,6 +226,55 @@ def build_crypto_tool(market_data: MarketDataProvider) -> Tool:
     )
 
 
+def save_generated_image(image: GeneratedImage) -> str:
+    filename = f"{uuid4().hex}.{image.extension}"
+    directory = Path(settings.image_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / filename).write_bytes(image.data)
+    return filename
+
+
+def build_image_tool(image_generator: ImageGenerator) -> Tool:
+    def generate_image(prompt: str) -> ToolOutput:
+        image = image_generator.generate(prompt)
+        filename = save_generated_image(image)
+        return ToolOutput(
+            text=f"Generated the image and showed it to the user: {prompt}",
+            widget=Widget(
+                kind="image",
+                data={
+                    "filename": filename,
+                    "prompt": prompt,
+                    "width": image.width,
+                    "height": image.height,
+                },
+            ),
+        )
+
+    return Tool(
+        name="generate_image",
+        description=(
+            "Generate an image from a text description and show it to the "
+            "user. Use it for pictures, photos, artwork, and illustrations — "
+            "never for diagrams or charts."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": (
+                        "A detailed English description of the image to "
+                        "generate, e.g. subject, setting, style, lighting"
+                    ),
+                }
+            },
+            "required": ["prompt"],
+        },
+        run=generate_image,
+    )
+
+
 @dataclass
 class SourceChunk:
     filename: str
@@ -394,7 +446,10 @@ def build_usage_stats_tool(session: Session) -> Tool:
 
 
 def build_tools(
-    session: Session, weather: WeatherProvider, market_data: MarketDataProvider
+    session: Session,
+    weather: WeatherProvider,
+    market_data: MarketDataProvider,
+    image_generator: ImageGenerator,
 ) -> list[Tool]:
     return [
         Tool(
@@ -433,4 +488,5 @@ def build_tools(
         build_crypto_tool(market_data),
         build_kb_stats_tool(session),
         build_usage_stats_tool(session),
+        build_image_tool(image_generator),
     ]

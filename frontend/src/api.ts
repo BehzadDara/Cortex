@@ -130,6 +130,9 @@ export const branchConversation = (messageId: number) =>
     method: "POST",
   });
 
+export const generatedImageUrl = (filename: string) =>
+  `${BASE}/images/${filename}`;
+
 export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);

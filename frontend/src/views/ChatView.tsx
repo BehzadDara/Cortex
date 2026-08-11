@@ -96,6 +96,7 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
   crypto_price: { running: "Fetching market prices", done: "Fetched market prices" },
   kb_stats: { running: "Checking your library", done: "Checked your library" },
   usage_stats: { running: "Checking usage", done: "Checked usage" },
+  generate_image: { running: "Generating an image", done: "Generated an image" },
 };
 
 function stepLabel(step: ToolStep): string {
@@ -240,6 +241,16 @@ function DatabaseIcon() {
   );
 }
 
+function ImageIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </svg>
+  );
+}
+
 const STEP_ICONS: Record<string, ComponentType> = {
   search_documents: SearchIcon,
   web_search: GlobeIcon,
@@ -250,6 +261,7 @@ const STEP_ICONS: Record<string, ComponentType> = {
   crypto_price: ChartIcon,
   kb_stats: DatabaseIcon,
   usage_stats: ChartIcon,
+  generate_image: ImageIcon,
 };
 
 function DownloadIcon() {

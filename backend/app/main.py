@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.api import (
@@ -25,7 +27,11 @@ async def lifespan(_: FastAPI):
     yield
 
 
+images_dir = Path(settings.image_dir)
+images_dir.mkdir(parents=True, exist_ok=True)
+
 app = FastAPI(title="Cortex", lifespan=lifespan)
+app.mount("/images", StaticFiles(directory=images_dir), name="images")
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)

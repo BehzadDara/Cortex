@@ -5,6 +5,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
+import { generatedImageUrl } from "../api";
 import type { Widget } from "../types";
 
 interface ClockData {
@@ -689,6 +690,79 @@ function UsageCard({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+interface ImageData {
+  filename: string;
+  prompt: string;
+  width: number;
+  height: number;
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" x2="12" y1="15" y2="3" />
+    </svg>
+  );
+}
+
+function downloadName(prompt: string, filename: string): string {
+  const extension = filename.split(".").pop() ?? "png";
+  const slug = prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  return `${slug || "cortex-image"}.${extension}`;
+}
+
+function ImageCard({ data }: { data: Record<string, unknown> }) {
+  const image = data as unknown as ImageData;
+  const [failed, setFailed] = useState(false);
+  const url = generatedImageUrl(image.filename);
+
+  if (failed) {
+    return (
+      <div className="widget-card image-card">
+        <span className="widget-subtle">Image unavailable · {image.prompt}</span>
+      </div>
+    );
+  }
+  return (
+    <figure className="widget-card image-card">
+      <a
+        className="image-link"
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Open full-size image: ${image.prompt}`}
+      >
+        <img
+          src={url}
+          alt={image.prompt}
+          width={image.width}
+          height={image.height}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </a>
+      <div className="image-footer">
+        <figcaption className="widget-subtle">{image.prompt}</figcaption>
+        <a
+          className="image-download"
+          href={url}
+          download={downloadName(image.prompt, image.filename)}
+          aria-label="Download image"
+        >
+          <DownloadIcon />
+          Download
+        </a>
+      </div>
+    </figure>
+  );
+}
+
 const WIDGET_COMPONENTS: Record<
   string,
   ComponentType<{ data: Record<string, unknown> }>
@@ -698,6 +772,7 @@ const WIDGET_COMPONENTS: Record<
   price_chart: PriceChartCard,
   kb_stats: KbStatsCard,
   usage: UsageCard,
+  image: ImageCard,
 };
 
 export function WidgetCard({ widget }: { widget: Widget }) {

@@ -27,6 +27,7 @@ from app.database import SessionLocal
 from app.dependencies import (
     get_embedding_provider,
     get_fast_llm_provider,
+    get_image_generator,
     get_llm_provider,
     get_market_data_provider,
     get_reranker,
@@ -42,6 +43,7 @@ from app.rag.conversation import (
     summarize_if_due,
 )
 from app.rag.embeddings import EmbeddingProvider
+from app.rag.image_generation import ImageGenerator
 from app.rag.llm import LLMProvider
 from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
@@ -66,8 +68,9 @@ def build_graph(
     fast_llm: LLMProvider,
     weather: WeatherProvider,
     market_data: MarketDataProvider,
+    image_generator: ImageGenerator,
 ):
-    tools = build_tools(session, weather, market_data)
+    tools = build_tools(session, weather, market_data, image_generator)
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
     search_web = build_web_search(web_search)
     return build_assistant_graph(
@@ -218,6 +221,7 @@ def assistant(
     web_search: WebSearchProvider = Depends(get_web_search),
     weather: WeatherProvider = Depends(get_weather_provider),
     market_data: MarketDataProvider = Depends(get_market_data_provider),
+    image_generator: ImageGenerator = Depends(get_image_generator),
 ) -> StreamingResponse:
     conversation, is_new = find_or_create_conversation(
         session, request.conversation_id, request.question
@@ -237,6 +241,7 @@ def assistant(
         fast_llm,
         weather,
         market_data,
+        image_generator,
     )
     thread_id = uuid4().hex
     set_active_thread(session, conversation, thread_id)
@@ -265,6 +270,7 @@ def continue_run(
     web_search: WebSearchProvider = Depends(get_web_search),
     weather: WeatherProvider = Depends(get_weather_provider),
     market_data: MarketDataProvider = Depends(get_market_data_provider),
+    image_generator: ImageGenerator = Depends(get_image_generator),
 ) -> StreamingResponse:
     conversation = session.get(Conversation, request.conversation_id)
     if conversation is None:
@@ -282,6 +288,7 @@ def continue_run(
         fast_llm,
         weather,
         market_data,
+        image_generator,
     )
     thread_id = conversation.active_thread
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
@@ -321,6 +328,7 @@ def resume(
     web_search: WebSearchProvider = Depends(get_web_search),
     weather: WeatherProvider = Depends(get_weather_provider),
     market_data: MarketDataProvider = Depends(get_market_data_provider),
+    image_generator: ImageGenerator = Depends(get_image_generator),
 ) -> StreamingResponse:
     if session.get(Conversation, request.conversation_id) is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -335,6 +343,7 @@ def resume(
         fast_llm,
         weather,
         market_data,
+        image_generator,
     )
     return StreamingResponse(
         stream_events(

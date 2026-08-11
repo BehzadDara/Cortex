@@ -36,5 +36,9 @@
   { "question": "How much have I used Cortex this week?", "needs_documents": false },
   { "question": "now for Etherium", "previous": "show me the last 24 hours of the bitcoin price", "needs_documents": false },
   { "question": "And in Berlin?", "previous": "How's the weather in Tehran?", "needs_documents": false },
-  { "question": "What about oolong?", "previous": "What temperature should green tea be brewed at?", "needs_documents": true }
+  { "question": "What about oolong?", "previous": "What temperature should green tea be brewed at?", "needs_documents": true },
+  { "question": "Draw a picture of a lighthouse in a storm.", "needs_documents": false },
+  { "question": "Generate an image of a futuristic city at night.", "needs_documents": false },
+  { "question": "Can you make me a watercolor painting of Saturn?", "needs_documents": false },
+  { "question": "Now as a photo instead.", "previous": "Can you make me a watercolor painting of Saturn?", "needs_documents": false }
 ]

@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -11,6 +15,10 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:4b"
     fast_llm_model: str = "gemma3:4b"
     vision_model: str = "gemma3:4b"
+    image_provider: str = "pollinations"
+    image_model: str = "x/z-image-turbo"
+    image_size: int = 768
+    image_dir: str = str(BACKEND_ROOT / "generated_images")
     ocr_max_pages: int = 5
     embedding_model: str = "nomic-embed-text"
     embedding_dimensions: int = 768

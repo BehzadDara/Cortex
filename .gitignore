@@ -11,6 +11,9 @@ venv/
 node_modules/
 dist/
 
+# Generated images
+backend/generated_images/
+
 # Environment
 .env
 .env.*
