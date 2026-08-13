@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import (
     get_embedding_provider,
+    get_image_vector_store,
+    get_knowledge_image_store,
     get_session,
     get_vector_store,
     get_vision_provider,
@@ -18,6 +20,7 @@ from app.dependencies import (
 from app.jobs import create_job, run_crawl, run_repository
 from app.models import Collection, Document
 from app.rag.embeddings import EmbeddingProvider
+from app.rag.file_store import FileStore
 from app.rag.ingestion import DuplicateDocumentError, ingest_document
 from app.rag.parsers import build_parsers, parser_for, supported_suffixes
 from app.rag.vector_store import VectorStore
@@ -50,6 +53,8 @@ def upload_document(
     session: Session = Depends(get_session),
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
+    image_vector_store: VectorStore = Depends(get_image_vector_store),
+    image_store: FileStore = Depends(get_knowledge_image_store),
     vision: VisionProvider = Depends(get_vision_provider),
 ) -> DocumentResponse:
     parsers = build_parsers(vision)
@@ -63,13 +68,22 @@ def upload_document(
     ensure_collection_exists(session, collection_id)
 
     try:
-        text = parser.parse(file.file.read())
+        parsed = parser.parse(file.file.read())
     except Exception:
         raise HTTPException(status_code=422, detail="Could not parse file")
 
     try:
         document = ingest_document(
-            session, file.filename, text, embeddings, vector_store, collection_id
+            session,
+            file.filename,
+            parsed.text,
+            embeddings,
+            vector_store,
+            collection_id,
+            images=parsed.images,
+            vision=vision,
+            image_store=image_store,
+            image_vector_store=image_vector_store,
         )
     except DuplicateDocumentError as error:
         raise HTTPException(status_code=409, detail=str(error))
@@ -119,11 +133,17 @@ def delete_document(
     document_id: int,
     session: Session = Depends(get_session),
     vector_store: VectorStore = Depends(get_vector_store),
+    image_vector_store: VectorStore = Depends(get_image_vector_store),
+    image_store: FileStore = Depends(get_knowledge_image_store),
 ) -> None:
     document = session.get(Document, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
     vector_store.remove([chunk.id for chunk in document.chunks])
+    if document.images:
+        image_vector_store.remove([image.id for image in document.images])
+        for image in document.images:
+            image_store.delete(image.filename)
     session.delete(document)
     session.commit()

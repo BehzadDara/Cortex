@@ -4,9 +4,16 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.dependencies import get_embedding_provider, get_vector_store
+from app.dependencies import (
+    get_embedding_provider,
+    get_image_vector_store,
+    get_knowledge_image_store,
+    get_vector_store,
+    get_vision_provider,
+)
 from app.models import Job
 from app.rag.crawler import crawl
+from app.rag.images import ExtractedImage
 from app.rag.ingestion import DuplicateDocumentError, ingest_document
 from app.rag.repository import collect_files
 
@@ -21,16 +28,27 @@ def create_job(kind: str) -> Job:
 
 
 def ingest_many(
-    session: Session, items: list[tuple[str, str]], collection_id: int | None
+    session: Session,
+    items: list[tuple[str, str, list[ExtractedImage]]],
+    collection_id: int | None,
 ) -> str:
     embeddings = get_embedding_provider()
     vector_store = get_vector_store()
     ingested = 0
     skipped = 0
-    for name, text in items:
+    for name, text, images in items:
         try:
             ingest_document(
-                session, name, text, embeddings, vector_store, collection_id
+                session,
+                name,
+                text,
+                embeddings,
+                vector_store,
+                collection_id,
+                images=images,
+                vision=get_vision_provider(),
+                image_store=get_knowledge_image_store(),
+                image_vector_store=get_image_vector_store(),
             )
             ingested += 1
         except DuplicateDocumentError:
@@ -60,7 +78,7 @@ def run_crawl(
         job_id,
         lambda session: ingest_many(
             session,
-            [(page.url, page.text) for page in crawl(url, max_pages)],
+            [(page.url, page.text, page.images) for page in crawl(url, max_pages)],
             collection_id,
         ),
     )
@@ -71,7 +89,7 @@ def run_repository(job_id: int, url: str, collection_id: int | None) -> None:
         job_id,
         lambda session: ingest_many(
             session,
-            [(file.path, file.text) for file in collect_files(url)],
+            [(file.path, file.text, []) for file in collect_files(url)],
             collection_id,
         ),
     )

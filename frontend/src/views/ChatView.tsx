@@ -97,6 +97,10 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
   kb_stats: { running: "Checking your library", done: "Checked your library" },
   usage_stats: { running: "Checking usage", done: "Checked usage" },
   generate_image: { running: "Generating an image", done: "Generated an image" },
+  web_image_search: {
+    running: "Searching web images",
+    done: "Searched web images",
+  },
 };
 
 function stepLabel(step: ToolStep): string {
@@ -262,6 +266,7 @@ const STEP_ICONS: Record<string, ComponentType> = {
   kb_stats: DatabaseIcon,
   usage_stats: ChartIcon,
   generate_image: ImageIcon,
+  web_image_search: ImageIcon,
 };
 
 function DownloadIcon() {
@@ -1038,7 +1043,9 @@ export default function ChatView() {
                     <div className="approval-text">
                       <GlobeIcon />
                       <span>
-                        Cortex wants to search the web for{" "}
+                        {message.approval.name === "web_image_search"
+                          ? "Cortex wants to search the web for images of "
+                          : "Cortex wants to search the web for "}
                         <strong>
                           {String(message.approval.arguments.query ?? "")}
                         </strong>

@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Chunk, Document
+from app.models import Chunk, Document, Image
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
@@ -67,5 +67,36 @@ def retrieve_chunks(
         if min_score is not None:
             scored = [pair for pair in scored if pair[0] >= min_score]
         ordered = [chunk for _, chunk in scored]
+
+    return ordered[:limit]
+
+
+def retrieve_images(
+    session: Session,
+    question: str,
+    limit: int,
+    embeddings: EmbeddingProvider,
+    image_vector_store: VectorStore,
+    reranker: Reranker | None = None,
+    min_score: float | None = None,
+) -> list[Image]:
+    reranking = reranker is not None and settings.rerank
+    candidates = settings.rerank_candidates if reranking else limit
+
+    query_vector = embeddings.embed_query(question)
+    image_ids = [
+        result.chunk_id
+        for result in image_vector_store.search(query_vector, candidates)
+    ]
+    images = session.scalars(select(Image).where(Image.id.in_(image_ids))).all()
+    rank = {image_id: index for index, image_id in enumerate(image_ids)}
+    ordered = sorted(images, key=lambda image: rank[image.id])
+
+    if reranking:
+        scores = reranker.rerank(question, [image.caption for image in ordered])
+        scored = sorted(zip(scores, ordered), key=lambda pair: pair[0], reverse=True)
+        if min_score is not None:
+            scored = [pair for pair in scored if pair[0] >= min_score]
+        ordered = [image for _, image in scored]
 
     return ordered[:limit]

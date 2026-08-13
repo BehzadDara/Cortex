@@ -13,6 +13,7 @@ dist/
 
 # Generated images
 backend/generated_images/
+backend/knowledge_images/
 
 # Environment
 .env

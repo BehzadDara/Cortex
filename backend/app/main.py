@@ -29,9 +29,16 @@ async def lifespan(_: FastAPI):
 
 images_dir = Path(settings.image_dir)
 images_dir.mkdir(parents=True, exist_ok=True)
+knowledge_images_dir = Path(settings.knowledge_image_dir)
+knowledge_images_dir.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Cortex", lifespan=lifespan)
 app.mount("/images", StaticFiles(directory=images_dir), name="images")
+app.mount(
+    "/knowledge-images",
+    StaticFiles(directory=knowledge_images_dir),
+    name="knowledge_images",
+)
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)

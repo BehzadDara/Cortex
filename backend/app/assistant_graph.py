@@ -53,10 +53,16 @@ SYSTEM_PROMPT = (
     "a picture, photo, artwork, or illustration, passing one detailed "
     "English description of the image; never call it for diagrams, "
     "flowcharts, or charts — those stay mermaid. "
-    "world_clock, get_weather, crypto_price, kb_stats, usage_stats, and "
-    "generate_image each render a visual card in the interface, so after "
-    "calling one, answer in one short sentence and never repeat the card's "
-    "numbers in a list or table. "
+    "Use web_image_search when the user asks to see or find existing "
+    "photos or pictures of something and the document searches attached "
+    "none — never to create new images. "
+    "Document search results may attach related images from the user's "
+    "documents; they are already shown to the user, so mention them "
+    "briefly at most and never describe them in detail. "
+    "world_clock, get_weather, crypto_price, kb_stats, usage_stats, "
+    "generate_image, and web_image_search each render a visual card in "
+    "the interface, so after calling one, answer in one short sentence and "
+    "never repeat the card's numbers in a list or table. "
     "Document passages and web results are labeled with bracketed numbers "
     "like [1]. When a claim in your answer comes from one, cite its number "
     "right after the claim, like [1] or [2][3]. "
@@ -74,7 +80,7 @@ FALLBACK_ANSWER = "I could not finish answering within the tool call limit."
 
 DECLINED_RESULT = "The user declined the web search."
 
-APPROVAL_TOOLS = {"web_search"}
+APPROVAL_TOOLS = {"web_search", "web_image_search"}
 
 RESULT_PREVIEW_CHARS = 500
 
@@ -161,6 +167,15 @@ def format_sources(sources: list[dict], empty_message: str) -> str:
     return "\n\n---\n\n".join(format_source(source) for source in sources)
 
 
+def gallery_filenames(widgets: list[dict]) -> set[str]:
+    return {
+        image["filename"]
+        for widget in widgets
+        if widget.get("kind") == "image_gallery"
+        for image in widget.get("data", {}).get("images", [])
+    }
+
+
 def decide_route(
     fast_llm: LLMProvider, question: str, previous: str | None = None
 ) -> bool:
@@ -177,6 +192,7 @@ def build_assistant_graph(
     tools: list[Tool],
     search_documents,
     search_web,
+    search_images=None,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
     definitions = [
@@ -196,8 +212,29 @@ def build_assistant_graph(
             writer({"type": "sources", "sources": found})
         return found, output
 
-    def run_document_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
-        return run_search(
+    def find_gallery(query: str, shown: set[str], writer) -> tuple[dict | None, str]:
+        if search_images is None:
+            return None, ""
+        try:
+            entries = search_images(query)
+        except Exception:
+            return None, ""
+        fresh = [entry for entry in entries if entry["filename"] not in shown]
+        if not fresh:
+            return None, ""
+        widget = {"kind": "image_gallery", "data": {"query": query, "images": fresh}}
+        writer({"type": "widget", "widget": widget})
+        captions = "; ".join(entry["caption"] for entry in fresh)
+        note = (
+            "\n\nRelated images from the documents are shown to the user: "
+            f"{captions}"
+        )
+        return widget, note
+
+    def run_document_search(
+        query: str, offset: int, shown: set[str], writer
+    ) -> tuple[list[dict], str, list[dict]]:
+        found, output = run_search(
             search_documents,
             "search_documents",
             "No matching documents found.",
@@ -205,6 +242,10 @@ def build_assistant_graph(
             offset,
             writer,
         )
+        widget, note = find_gallery(query, shown, writer)
+        if widget is None:
+            return found, output, []
+        return found, output + note, [widget]
 
     def run_web_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
         return run_search(
@@ -231,9 +272,15 @@ def build_assistant_graph(
                 "arguments": {"query": question},
             }
         )
-        found, output = run_document_search(question, len(state["sources"]), writer)
+        found, output, widgets = run_document_search(
+            question,
+            len(state["sources"]),
+            gallery_filenames(state["widgets"]),
+            writer,
+        )
         return {
             "sources": found,
+            "widgets": widgets,
             "messages": [
                 {
                     "role": "assistant",
@@ -292,10 +339,14 @@ def build_assistant_graph(
                 )
             elif call.name == "search_documents":
                 offset = len(state["sources"]) + len(new_sources)
-                found, output = run_document_search(
-                    str(call.arguments.get("query", "")), offset, writer
+                shown = gallery_filenames(state["widgets"]) | gallery_filenames(
+                    new_widgets
+                )
+                found, output, widgets = run_document_search(
+                    str(call.arguments.get("query", "")), offset, shown, writer
                 )
                 new_sources.extend(found)
+                new_widgets.extend(widgets)
             elif call.name == "web_search":
                 offset = len(state["sources"]) + len(new_sources)
                 found, output = run_web_search(

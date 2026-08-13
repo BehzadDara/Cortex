@@ -17,10 +17,19 @@ class Settings(BaseSettings):
     vision_model: str = "gemma3:4b"
     image_size: int = 768
     image_dir: str = str(BACKEND_ROOT / "generated_images")
+    knowledge_image_dir: str = str(BACKEND_ROOT / "knowledge_images")
+    max_images_per_document: int = 8
+    max_image_bytes: int = 8_000_000
+    min_image_dimension: int = 128
+    crawl_max_images_per_page: int = 4
+    image_top_k: int = 3
+    image_min_relevance: float = 0.0
+    web_image_results: int = 8
     ocr_max_pages: int = 5
     embedding_model: str = "nomic-embed-text"
     embedding_dimensions: int = 768
     qdrant_collection: str = "chunks"
+    qdrant_image_collection: str = "images"
 
     chunk_size: int = 1000
     chunk_overlap: int = 200

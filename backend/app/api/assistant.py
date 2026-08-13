@@ -27,7 +27,11 @@ from app.database import SessionLocal
 from app.dependencies import (
     get_embedding_provider,
     get_fast_llm_provider,
+    get_generated_image_store,
     get_image_generator,
+    get_image_search,
+    get_image_vector_store,
+    get_knowledge_image_store,
     get_llm_provider,
     get_market_data_provider,
     get_reranker,
@@ -51,7 +55,12 @@ from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
 from app.rag.web_search import WebSearchProvider
 from app.schemas import AskRequest, ContinueRequest, ResumeRequest
-from app.tools import build_document_search, build_tools, build_web_search
+from app.tools import (
+    build_document_search,
+    build_knowledge_image_search,
+    build_tools,
+    build_web_search,
+)
 
 router = APIRouter(tags=["assistant"])
 
@@ -70,8 +79,19 @@ def build_graph(
     market_data: MarketDataProvider,
     image_generator: ImageGenerator,
 ):
-    tools = build_tools(session, weather, market_data, image_generator)
+    tools = build_tools(
+        session,
+        weather,
+        market_data,
+        image_generator,
+        get_image_search(),
+        get_generated_image_store(),
+        get_knowledge_image_store(),
+    )
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
+    search_images = build_knowledge_image_search(
+        session, embeddings, get_image_vector_store(), reranker
+    )
     search_web = build_web_search(web_search)
     return build_assistant_graph(
         llm,
@@ -79,6 +99,7 @@ def build_graph(
         tools,
         search_documents,
         search_web,
+        search_images,
         checkpointer=get_checkpointer(),
     )
 

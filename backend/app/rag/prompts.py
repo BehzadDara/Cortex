@@ -50,6 +50,8 @@ Summary:"""
 
 TRANSCRIBE_PROMPT = """Transcribe all text visible in this image exactly. If the image contains diagrams, charts, or figures, describe each one briefly after the transcription. Output only the transcription and descriptions."""
 
+CAPTION_PROMPT = """Describe this image in one or two sentences so it can be found by search: what it shows, any prominent text, and what it is about. Output only the description."""
+
 def build_title_prompt(question: str) -> str:
     return TITLE_PROMPT.format(question=question)
 

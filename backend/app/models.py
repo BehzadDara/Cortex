@@ -36,6 +36,9 @@ class Document(Base):
     chunks: Mapped[list["Chunk"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+    images: Mapped[list["Image"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
 
 
 class Chunk(Base):
@@ -47,6 +50,22 @@ class Chunk(Base):
     position: Mapped[int]
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class Image(Base):
+    __tablename__ = "images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"))
+    filename: Mapped[str]
+    caption: Mapped[str] = mapped_column(Text)
+    source_url: Mapped[str | None]
+    position: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    document: Mapped[Document] = relationship(back_populates="images")
 
 
 class Job(Base):

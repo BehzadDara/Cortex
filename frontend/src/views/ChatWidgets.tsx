@@ -5,7 +5,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { generatedImageUrl } from "../api";
+import { generatedImageUrl, knowledgeImageUrl } from "../api";
 import type { Widget } from "../types";
 
 interface ClockData {
@@ -513,21 +513,25 @@ function PriceChartCard({ data }: { data: Record<string, unknown> }) {
 interface KbStatsData {
   documents: number;
   chunks: number;
+  images?: number;
   collections: number;
   conversations: number;
 }
 
 function KbStatsCard({ data }: { data: Record<string, unknown> }) {
   const stats = data as unknown as KbStatsData;
-  const tiles: [string, number][] = [
-    ["Documents", stats.documents],
-    ["Chunks", stats.chunks],
-    ["Collections", stats.collections],
-    ["Chats", stats.conversations],
-  ];
+  const tiles = (
+    [
+      ["Documents", stats.documents],
+      ["Chunks", stats.chunks],
+      ["Images", stats.images],
+      ["Collections", stats.collections],
+      ["Chats", stats.conversations],
+    ] as [string, number | undefined][]
+  ).filter((tile): tile is [string, number] => tile[1] !== undefined);
   const summary =
-    `Knowledge base: ${stats.documents} documents, ${stats.chunks} chunks, ` +
-    `${stats.collections} collections, ${stats.conversations} conversations`;
+    "Knowledge base: " +
+    tiles.map(([label, value]) => `${value} ${label.toLowerCase()}`).join(", ");
 
   return (
     <div className="widget-card stats-card" role="img" aria-label={summary}>
@@ -763,6 +767,116 @@ function ImageCard({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+interface GalleryImage {
+  filename: string;
+  caption: string;
+  source: string | null;
+  source_url: string | null;
+}
+
+interface GalleryData {
+  query: string;
+  images: GalleryImage[];
+}
+
+function ExternalLinkIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </svg>
+  );
+}
+
+function gallerySource(image: GalleryImage): string | null {
+  if (image.source) return image.source;
+  if (!image.source_url) return null;
+  try {
+    return new URL(image.source_url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+function GalleryItem({ image }: { image: GalleryImage }) {
+  const [failed, setFailed] = useState(false);
+  const url = knowledgeImageUrl(image.filename);
+  const source = gallerySource(image);
+
+  if (failed) return null;
+  return (
+    <figure className="gallery-item">
+      <a
+        className="image-link"
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Open full-size image: ${image.caption}`}
+      >
+        <img
+          className="gallery-thumb"
+          src={url}
+          alt={image.caption}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </a>
+      <figcaption className="gallery-caption" title={image.caption}>
+        {image.caption}
+      </figcaption>
+      {source &&
+        (image.source_url ? (
+          <a
+            className="gallery-source"
+            href={image.source_url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open image source: ${source}`}
+          >
+            <ExternalLinkIcon />
+            <span className="gallery-source-name">{source}</span>
+          </a>
+        ) : (
+          <span className="gallery-source">
+            <FileIcon />
+            <span className="gallery-source-name">{source}</span>
+          </span>
+        ))}
+    </figure>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    </svg>
+  );
+}
+
+function ImageGalleryCard({ data }: { data: Record<string, unknown> }) {
+  const gallery = data as unknown as GalleryData;
+  const images = gallery.images ?? [];
+  if (images.length === 0) return null;
+
+  return (
+    <div
+      className="widget-card gallery-card"
+      role="group"
+      aria-label={`${images.length} related ${images.length === 1 ? "image" : "images"}`}
+    >
+      <span className="widget-title">Related images</span>
+      <div className={images.length === 1 ? "gallery-grid single" : "gallery-grid"}>
+        {images.map((image) => (
+          <GalleryItem key={image.filename} image={image} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const WIDGET_COMPONENTS: Record<
   string,
   ComponentType<{ data: Record<string, unknown> }>
@@ -773,6 +887,7 @@ const WIDGET_COMPONENTS: Record<
   kb_stats: KbStatsCard,
   usage: UsageCard,
   image: ImageCard,
+  image_gallery: ImageGalleryCard,
 };
 
 export function WidgetCard({ widget }: { widget: Widget }) {

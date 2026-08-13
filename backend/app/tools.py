@@ -3,23 +3,23 @@ import operator
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
-from pathlib import Path
-from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Chunk, Collection, Conversation, Document, PromptLog
+from app.models import Chunk, Collection, Conversation, Document, Image, PromptLog
 from app.rag.embeddings import EmbeddingProvider
-from app.rag.image_generation import GeneratedImage, ImageGenerator
+from app.rag.file_store import FileStore
+from app.rag.image_generation import ImageGenerator
+from app.rag.images import download_image
 from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
-from app.rag.retrieval import retrieve_chunks
+from app.rag.retrieval import retrieve_chunks, retrieve_images
 from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
-from app.rag.web_search import WebSearchProvider
+from app.rag.web_search import ImageSearchProvider, WebImage, WebSearchProvider
 
 
 @dataclass
@@ -226,18 +226,10 @@ def build_crypto_tool(market_data: MarketDataProvider) -> Tool:
     )
 
 
-def save_generated_image(image: GeneratedImage) -> str:
-    filename = f"{uuid4().hex}.{image.extension}"
-    directory = Path(settings.image_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / filename).write_bytes(image.data)
-    return filename
-
-
-def build_image_tool(image_generator: ImageGenerator) -> Tool:
+def build_image_tool(image_generator: ImageGenerator, file_store: FileStore) -> Tool:
     def generate_image(prompt: str) -> ToolOutput:
         image = image_generator.generate(prompt)
-        filename = save_generated_image(image)
+        filename = file_store.save(image.data, image.extension)
         return ToolOutput(
             text=f"Generated the image and showed it to the user: {prompt}",
             widget=Widget(
@@ -347,18 +339,112 @@ def build_web_search(web_search: WebSearchProvider):
     return search_web
 
 
+def gallery_entry(image: Image) -> dict:
+    return {
+        "filename": image.filename,
+        "caption": image.caption,
+        "source": image.document.filename,
+        "source_url": image.source_url,
+    }
+
+
+def build_knowledge_image_search(
+    session: Session,
+    embeddings: EmbeddingProvider,
+    image_vector_store: VectorStore,
+    reranker: Reranker,
+):
+    def search_images(query: str) -> list[dict]:
+        images = retrieve_images(
+            session,
+            query,
+            settings.image_top_k,
+            embeddings,
+            image_vector_store,
+            reranker=reranker,
+            min_score=settings.image_min_relevance,
+        )
+        return [gallery_entry(image) for image in images]
+
+    return search_images
+
+
+WEB_IMAGE_DISPLAY_COUNT = 3
+
+
+def fetch_web_image(result: WebImage):
+    for url in (result.image_url, result.thumbnail_url):
+        if not url:
+            continue
+        image = download_image(url)
+        if image is not None:
+            return image
+    return None
+
+
+def build_web_image_tool(
+    image_search: ImageSearchProvider, file_store: FileStore
+) -> Tool:
+    def web_image_search(query: str) -> ToolOutput:
+        try:
+            results = image_search.search(query)
+        except Exception:
+            results = []
+        entries = []
+        for result in results:
+            if len(entries) >= WEB_IMAGE_DISPLAY_COUNT:
+                break
+            image = fetch_web_image(result)
+            if image is None:
+                continue
+            entries.append(
+                {
+                    "filename": file_store.save(image.data, image.extension),
+                    "caption": result.title,
+                    "source": None,
+                    "source_url": result.page_url,
+                }
+            )
+        if not entries:
+            return ToolOutput(text=f"No web images found for '{query}'.")
+        captions = "; ".join(entry["caption"] for entry in entries)
+        return ToolOutput(
+            text=(
+                f"Found {len(entries)} web images and showed them to the "
+                f"user: {captions}"
+            ),
+            widget=Widget(
+                kind="image_gallery", data={"query": query, "images": entries}
+            ),
+        )
+
+    return Tool(
+        name="web_image_search",
+        description=(
+            "Search the web for existing photos or pictures of something and "
+            "show them to the user. Use it when the user asks to see or find "
+            "real images of a thing, place, or person — never when they ask "
+            "you to create, draw, or imagine one."
+        ),
+        parameters=SEARCH_PARAMETERS,
+        run=web_image_search,
+    )
+
+
 def build_kb_stats_tool(session: Session) -> Tool:
     def kb_stats() -> ToolOutput:
         counts = {
             "documents": session.scalar(select(func.count(Document.id))),
             "chunks": session.scalar(select(func.count(Chunk.id))),
+            "images": session.scalar(select(func.count(Image.id))),
             "collections": session.scalar(select(func.count(Collection.id))),
             "conversations": session.scalar(select(func.count(Conversation.id))),
         }
         return ToolOutput(
             text=(
                 f"Knowledge base: {counts['documents']} documents, "
-                f"{counts['chunks']} chunks, {counts['collections']} collections, "
+                f"{counts['chunks']} chunks, {counts['images']} images, "
+                f"{counts['collections']} collections, "
                 f"{counts['conversations']} conversations."
             ),
             widget=Widget(kind="kb_stats", data=counts),
@@ -368,7 +454,7 @@ def build_kb_stats_tool(session: Session) -> Tool:
         name="kb_stats",
         description=(
             "Get the size of the user's knowledge base: how many documents, "
-            "chunks, collections, and conversations it holds."
+            "chunks, images, collections, and conversations it holds."
         ),
         parameters={"type": "object", "properties": {}},
         run=kb_stats,
@@ -450,6 +536,9 @@ def build_tools(
     weather: WeatherProvider,
     market_data: MarketDataProvider,
     image_generator: ImageGenerator,
+    image_search: ImageSearchProvider,
+    generated_image_store: FileStore,
+    web_image_store: FileStore,
 ) -> list[Tool]:
     return [
         Tool(
@@ -488,5 +577,6 @@ def build_tools(
         build_crypto_tool(market_data),
         build_kb_stats_tool(session),
         build_usage_stats_tool(session),
-        build_image_tool(image_generator),
+        build_image_tool(image_generator, generated_image_store),
+        build_web_image_tool(image_search, web_image_store),
     ]

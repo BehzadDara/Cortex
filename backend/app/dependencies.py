@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.rag.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
+from app.rag.file_store import DiskFileStore, FileStore
 from app.rag.image_generation import ImageGenerator, PollinationsImageGenerator
 from app.rag.llm import LLMProvider, OllamaLLMProvider
 from app.rag.market_data import CoinGeckoMarketData, MarketDataProvider
@@ -13,7 +14,12 @@ from app.rag.reranking import CrossEncoderReranker, Reranker
 from app.rag.vector_store import QdrantVectorStore, VectorStore
 from app.rag.vision import OllamaVisionProvider, VisionProvider
 from app.rag.weather import OpenMeteoWeather, WeatherProvider
-from app.rag.web_search import DdgsWebSearch, WebSearchProvider
+from app.rag.web_search import (
+    DdgsImageSearch,
+    DdgsWebSearch,
+    ImageSearchProvider,
+    WebSearchProvider,
+)
 
 
 def get_session() -> Iterator[Session]:
@@ -42,6 +48,21 @@ def get_vector_store() -> VectorStore:
 
 
 @lru_cache
+def get_image_vector_store() -> VectorStore:
+    return QdrantVectorStore(collection=settings.qdrant_image_collection)
+
+
+@lru_cache
+def get_generated_image_store() -> FileStore:
+    return DiskFileStore(settings.image_dir)
+
+
+@lru_cache
+def get_knowledge_image_store() -> FileStore:
+    return DiskFileStore(settings.knowledge_image_dir)
+
+
+@lru_cache
 def get_reranker() -> Reranker:
     return CrossEncoderReranker()
 
@@ -59,6 +80,11 @@ def get_image_generator() -> ImageGenerator:
 @lru_cache
 def get_web_search() -> WebSearchProvider:
     return DdgsWebSearch()
+
+
+@lru_cache
+def get_image_search() -> ImageSearchProvider:
+    return DdgsImageSearch()
 
 
 @lru_cache
