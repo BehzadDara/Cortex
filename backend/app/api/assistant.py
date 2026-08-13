@@ -59,6 +59,7 @@ from app.tools import (
     build_document_search,
     build_knowledge_image_search,
     build_tools,
+    build_web_image_gallery,
     build_web_search,
 )
 
@@ -93,6 +94,9 @@ def build_graph(
         session, embeddings, get_image_vector_store(), reranker
     )
     search_web = build_web_search(web_search)
+    search_web_images = build_web_image_gallery(
+        get_image_search(), get_knowledge_image_store(), reranker
+    )
     return build_assistant_graph(
         llm,
         fast_llm,
@@ -100,6 +104,7 @@ def build_graph(
         search_documents,
         search_web,
         search_images,
+        search_web_images,
         checkpointer=get_checkpointer(),
     )
 

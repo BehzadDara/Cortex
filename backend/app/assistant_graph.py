@@ -56,9 +56,9 @@ SYSTEM_PROMPT = (
     "Use web_image_search when the user asks to see or find existing "
     "photos or pictures of something and the document searches attached "
     "none — never to create new images. "
-    "Document search results may attach related images from the user's "
-    "documents; they are already shown to the user, so mention them "
-    "briefly at most and never describe them in detail. "
+    "Document and web searches may attach related images; they are "
+    "already shown to the user, so mention them briefly at most and never "
+    "describe them in detail. "
     "world_clock, get_weather, crypto_price, kb_stats, usage_stats, "
     "generate_image, and web_image_search each render a visual card in "
     "the interface, so after calling one, answer in one short sentence and "
@@ -167,9 +167,13 @@ def format_sources(sources: list[dict], empty_message: str) -> str:
     return "\n\n---\n\n".join(format_source(source) for source in sources)
 
 
-def gallery_filenames(widgets: list[dict]) -> set[str]:
+def gallery_key(image: dict) -> str:
+    return image.get("source_url") or image["filename"]
+
+
+def gallery_keys(widgets: list[dict]) -> set[str]:
     return {
-        image["filename"]
+        gallery_key(image)
         for widget in widgets
         if widget.get("kind") == "image_gallery"
         for image in widget.get("data", {}).get("images", [])
@@ -193,6 +197,7 @@ def build_assistant_graph(
     search_documents,
     search_web,
     search_images=None,
+    search_web_images=None,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
     definitions = [
@@ -212,24 +217,22 @@ def build_assistant_graph(
             writer({"type": "sources", "sources": found})
         return found, output
 
-    def find_gallery(query: str, shown: set[str], writer) -> tuple[dict | None, str]:
-        if search_images is None:
+    def find_gallery(
+        search, query: str, shown: set[str], note: str, writer
+    ) -> tuple[dict | None, str]:
+        if search is None:
             return None, ""
         try:
-            entries = search_images(query)
+            entries = search(query)
         except Exception:
             return None, ""
-        fresh = [entry for entry in entries if entry["filename"] not in shown]
+        fresh = [entry for entry in entries if gallery_key(entry) not in shown]
         if not fresh:
             return None, ""
         widget = {"kind": "image_gallery", "data": {"query": query, "images": fresh}}
         writer({"type": "widget", "widget": widget})
         captions = "; ".join(entry["caption"] for entry in fresh)
-        note = (
-            "\n\nRelated images from the documents are shown to the user: "
-            f"{captions}"
-        )
-        return widget, note
+        return widget, f"\n\n{note} {captions}"
 
     def run_document_search(
         query: str, offset: int, shown: set[str], writer
@@ -242,15 +245,35 @@ def build_assistant_graph(
             offset,
             writer,
         )
-        widget, note = find_gallery(query, shown, writer)
+        widget, note = find_gallery(
+            search_images,
+            query,
+            shown,
+            "Related images from the documents are shown to the user:",
+            writer,
+        )
         if widget is None:
             return found, output, []
         return found, output + note, [widget]
 
-    def run_web_search(query: str, offset: int, writer) -> tuple[list[dict], str]:
-        return run_search(
+    def run_web_search(
+        query: str, offset: int, shown: set[str], writer
+    ) -> tuple[list[dict], str, list[dict]]:
+        found, output = run_search(
             search_web, "web_search", "No web results found.", query, offset, writer
         )
+        if not found:
+            return found, output, []
+        widget, note = find_gallery(
+            search_web_images,
+            query,
+            shown,
+            "Related photos from the web are shown to the user:",
+            writer,
+        )
+        if widget is None:
+            return found, output, []
+        return found, output + note, [widget]
 
     def route(state: AssistantState) -> dict:
         return {
@@ -275,7 +298,7 @@ def build_assistant_graph(
         found, output, widgets = run_document_search(
             question,
             len(state["sources"]),
-            gallery_filenames(state["widgets"]),
+            gallery_keys(state["widgets"]),
             writer,
         )
         return {
@@ -339,9 +362,7 @@ def build_assistant_graph(
                 )
             elif call.name == "search_documents":
                 offset = len(state["sources"]) + len(new_sources)
-                shown = gallery_filenames(state["widgets"]) | gallery_filenames(
-                    new_widgets
-                )
+                shown = gallery_keys(state["widgets"]) | gallery_keys(new_widgets)
                 found, output, widgets = run_document_search(
                     str(call.arguments.get("query", "")), offset, shown, writer
                 )
@@ -349,10 +370,12 @@ def build_assistant_graph(
                 new_widgets.extend(widgets)
             elif call.name == "web_search":
                 offset = len(state["sources"]) + len(new_sources)
-                found, output = run_web_search(
-                    str(call.arguments.get("query", "")), offset, writer
+                shown = gallery_keys(state["widgets"]) | gallery_keys(new_widgets)
+                found, output, widgets = run_web_search(
+                    str(call.arguments.get("query", "")), offset, shown, writer
                 )
                 new_sources.extend(found)
+                new_widgets.extend(widgets)
             else:
                 tool_output = execute_tool(tool_map, call)
                 output = tool_output.text

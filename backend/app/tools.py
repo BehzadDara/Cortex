@@ -1,5 +1,6 @@
 import ast
 import operator
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
@@ -382,29 +383,69 @@ def fetch_web_image(result: WebImage):
     return None
 
 
+def download_web_images(
+    results: list[WebImage], file_store: FileStore
+) -> list[dict]:
+    entries: list[dict] = []
+    for result in results:
+        if len(entries) >= WEB_IMAGE_DISPLAY_COUNT:
+            break
+        image = fetch_web_image(result)
+        if image is None:
+            continue
+        entries.append(
+            {
+                "filename": file_store.save(image.data, image.extension),
+                "caption": result.title,
+                "source": None,
+                "source_url": result.page_url,
+            }
+        )
+    return entries
+
+
+IMAGE_SEARCH_RETRY_DELAY_SECONDS = 2
+
+
+def search_images_with_retry(
+    image_search: ImageSearchProvider, query: str
+) -> list[WebImage]:
+    try:
+        return image_search.search(query)
+    except Exception:
+        time.sleep(IMAGE_SEARCH_RETRY_DELAY_SECONDS)
+        return image_search.search(query)
+
+
+def build_web_image_gallery(
+    image_search: ImageSearchProvider, file_store: FileStore, reranker: Reranker
+):
+    def find_web_images(query: str) -> list[dict]:
+        results = search_images_with_retry(image_search, query)
+        if results and settings.rerank:
+            scores = reranker.rerank(query, [result.title for result in results])
+            scored = sorted(
+                zip(scores, results), key=lambda pair: pair[0], reverse=True
+            )
+            results = [
+                result
+                for score, result in scored
+                if score >= settings.image_min_relevance
+            ]
+        return download_web_images(results, file_store)
+
+    return find_web_images
+
+
 def build_web_image_tool(
     image_search: ImageSearchProvider, file_store: FileStore
 ) -> Tool:
     def web_image_search(query: str) -> ToolOutput:
         try:
-            results = image_search.search(query)
+            results = search_images_with_retry(image_search, query)
         except Exception:
             results = []
-        entries = []
-        for result in results:
-            if len(entries) >= WEB_IMAGE_DISPLAY_COUNT:
-                break
-            image = fetch_web_image(result)
-            if image is None:
-                continue
-            entries.append(
-                {
-                    "filename": file_store.save(image.data, image.extension),
-                    "caption": result.title,
-                    "source": None,
-                    "source_url": result.page_url,
-                }
-            )
+        entries = download_web_images(results, file_store)
         if not entries:
             return ToolOutput(text=f"No web images found for '{query}'.")
         captions = "; ".join(entry["caption"] for entry in entries)
