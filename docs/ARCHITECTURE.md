@@ -47,6 +47,8 @@ Cortex is a local-first RAG system. Everything runs on the developer's machine: 
 
 **Image generation** — The `generate_image` tool creates images from text through the `ImageGenerator` abstraction. The implementation calls Pollinations.ai, a free, keyless image API — the one deliberate exception to local-first, made after local diffusion proved too heavy next to the chat models on a 24 GB machine (see DECISIONS.md); only the draw-prompt leaves the machine, never documents or questions. The returned image is written to `backend/generated_images/` and served by a static mount at `/images/{filename}`; the widget persisted on the message stores only the filename, keeping conversation payloads light. Diagrams stay with mermaid — the system prompt reserves `generate_image` for pictures, photos, artwork, and illustrations.
 
+**Voice** — Both directions run in-process inside the backend, so audio never leaves the machine. `/transcribe` accepts a WAV upload — the chat's mic button records in the browser, downmixes to 16 kHz mono, and encodes the WAV client-side, so the backend needs no audio codecs — and hands it to Whisper behind the `SpeechToText` abstraction; the transcript auto-sends through the normal `/assistant` flow, changing nothing downstream. `/speak` turns answer text into WAV through the `TextToSpeech` abstraction (Kokoro), stripping code blocks, markdown symbols, and citation markers first; the frontend plays it behind a read-aloud button on every saved assistant answer, one playback at a time.
+
 Three earlier endpoints — `/ask` (the fixed RAG pipeline), `/chat` (a hand-rolled tool loop), and `/agent` (a hardcoded planner → retriever → reasoner pipeline, later rebuilt as a LangGraph fan-out graph) — were folded into the assistant and retired; DECISIONS.md records the comparisons. Every LLM call pins `num_ctx` explicitly so gathered evidence is never silently truncated by Ollama's small default context.
 
 **Storage** — PostgreSQL is the source of truth: documents, chunks, images, logs, and later collections and users. Schema is managed with Alembic. Qdrant stores one vector per chunk in the `chunks` collection and one caption vector per image in the `images` collection — separate collections because point ids are the Postgres row ids, and chunk and image ids would collide. Keeping the stores in sync is the ingestion service's responsibility. Binary files live on disk behind the `FileStore` abstraction; MinIO stays out until a deployment needs it.
@@ -69,6 +71,8 @@ Business logic depends on interfaces only. Each concrete provider is one impleme
 | `WeatherProvider`   | Open-Meteo                | Any weather API              |
 | `MarketDataProvider`| CoinGecko                 | Any market data API          |
 | `Reranker`          | ms-marco cross-encoder    | Any cross-encoder or API     |
+| `SpeechToText`      | Whisper (mlx-whisper)     | whisper.cpp, any STT API     |
+| `TextToSpeech`      | Kokoro (kokoro-onnx)      | Piper, any TTS API           |
 | `ImageGenerator`    | Pollinations (free API)   | Local diffusion, ComfyUI, any image API |
 
 LangGraph sits outside this table on purpose: it orchestrates control flow (the assistant's model ⇄ tools cycle, checkpointing, interrupts) but never talks to a model or database itself — swapping any provider still touches one file.
@@ -81,8 +85,8 @@ LangGraph sits outside this table on purpose: it orchestrates control flow (the 
 | gemma3:4b                            | Ollama                            | Routing (`route` node), conversation titles, and vision: OCR, image captions, `/ask-image`     |
 | nomic-embed-text                     | Ollama                            | Embeddings for chunks, image captions, and queries                                             |
 | ms-marco-MiniLM-L-6-v2               | In-process (sentence-transformers)| Cross-encoder re-ranking and relevance gating in the retrieval funnel                          |
-| whisper-large-v3-turbo               | In-process (mlx-whisper)          | Speech-to-text for voice input — step 23                                                       |
-| Kokoro v1.0                          | In-process (kokoro-onnx)          | Text-to-speech for reading answers aloud — step 24                                             |
+| whisper-large-v3-turbo               | In-process (mlx-whisper)          | Speech-to-text behind `/transcribe` — the chat's mic button                                    |
+| Kokoro v1.0                          | In-process (kokoro-onnx)          | Text-to-speech behind `/speak` — reading answers aloud                                         |
 | Pollinations (hosted)                | Remote keyless API                | `generate_image` — the one deliberate exception to local-first; only the draw-prompt leaves the machine |
 
 Everything except Pollinations runs on the local machine. The Ollama models are pulled once with `ollama pull`; the cross-encoder and Whisper download to the Hugging Face cache on first use; Kokoro's weights live in `backend/voice_models/` (gitignored). The in-process models load inside the FastAPI backend — starting the backend is all it takes, no extra service to run.
@@ -101,6 +105,10 @@ Prerequisites: Docker, Python 3.12+, [Ollama](https://ollama.com).
 ollama pull qwen3:4b
 ollama pull gemma3:4b
 ollama pull nomic-embed-text
+
+mkdir -p backend/voice_models
+curl -L -o backend/voice_models/kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+curl -L -o backend/voice_models/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
 
 docker compose -f docker/docker-compose.yml up -d
 
@@ -121,7 +129,7 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (one assistant conversation surface, with live tool-step cards, web-search approval prompts, mermaid code blocks rendered as downloadable SVG diagrams, widget cards — live clock, weather, crypto price chart, knowledge-base and usage stats, generated images, and related-image galleries from documents or the web — and like/dislike plus branch-from-here on every answer), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, likes and dislikes, average latency, token usage, and recent prompt history.
+The app runs at `http://localhost:5100` and proxies `/api/*` to the backend, so no CORS setup is needed. Views: Chat (one assistant conversation surface, with live tool-step cards, web-search approval prompts, mermaid code blocks rendered as downloadable SVG diagrams, widget cards — live clock, weather, crypto price chart, knowledge-base and usage stats, generated images, and related-image galleries from documents or the web — a mic button that turns speech into the question, read-aloud on every answer, and like/dislike plus branch-from-here on every answer), Documents, Collections, and a Dashboard fed by `/stats` and `/logs` — counts, likes and dislikes, average latency, token usage, and recent prompt history.
 
 ## Background jobs
 

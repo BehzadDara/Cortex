@@ -11,6 +11,8 @@ from app.rag.image_generation import ImageGenerator, PollinationsImageGenerator
 from app.rag.llm import LLMProvider, OllamaLLMProvider
 from app.rag.market_data import CoinGeckoMarketData, MarketDataProvider
 from app.rag.reranking import CrossEncoderReranker, Reranker
+from app.rag.speech import KokoroTextToSpeech, TextToSpeech
+from app.rag.transcription import SpeechToText, WhisperSpeechToText
 from app.rag.vector_store import QdrantVectorStore, VectorStore
 from app.rag.vision import OllamaVisionProvider, VisionProvider
 from app.rag.weather import OpenMeteoWeather, WeatherProvider
@@ -92,6 +94,16 @@ def get_image_search() -> ImageSearchProvider:
 @lru_cache
 def get_video_search() -> VideoSearchProvider:
     return DdgsVideoSearch()
+
+
+@lru_cache
+def get_speech_to_text() -> SpeechToText:
+    return WhisperSpeechToText()
+
+
+@lru_cache
+def get_text_to_speech() -> TextToSpeech:
+    return KokoroTextToSpeech()
 
 
 @lru_cache

@@ -627,6 +627,24 @@ button.meta-button.selected svg {
   fill: currentColor;
 }
 
+button.meta-button.speaking {
+  color: var(--accent);
+}
+
+button.meta-button.speaking.loading svg {
+  animation: speech-loading 1s ease-in-out infinite;
+}
+
+@keyframes speech-loading {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 button.meta-button.like.selected {
   color: var(--ok);
 }
@@ -764,6 +782,25 @@ button.ghost.icon {
 
 button.ghost.icon:hover {
   color: var(--foreground);
+}
+
+button.ghost.icon.recording {
+  color: var(--destructive);
+  border-color: var(--destructive);
+  animation: recording-pulse 1.5s ease-out infinite;
+}
+
+button.ghost.icon.recording:hover {
+  color: var(--destructive);
+}
+
+@keyframes recording-pulse {
+  from {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 7px rgba(220, 38, 38, 0);
+  }
 }
 
 .chat-composer {

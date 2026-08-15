@@ -119,6 +119,30 @@ export async function askImage(
   return response.json();
 }
 
+export async function transcribeAudio(audio: Blob): Promise<string> {
+  const form = new FormData();
+  form.append("file", audio, "recording.wav");
+  const response = await fetch(`${BASE}/transcribe`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) throw await toError(response);
+  const body: { text: string } = await response.json();
+  return body.text;
+}
+
+export async function speakText(
+  text: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(`${BASE}/speak`, {
+    ...jsonInit("POST", { text }),
+    signal,
+  });
+  if (!response.ok) throw await toError(response);
+  return response.blob();
+}
+
 export const submitFeedback = (messageId: number, value: Feedback | null) =>
   request<{ id: number; feedback: Feedback | null }>(
     `/messages/${messageId}/feedback`,

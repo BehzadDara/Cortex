@@ -15,6 +15,7 @@ from app.api import (
     messages,
     stats,
     vision,
+    voice,
 )
 from app.checkpoints import warm_checkpointer
 from app.config import settings
@@ -45,6 +46,7 @@ app.include_router(conversations.router)
 app.include_router(messages.router)
 app.include_router(assistant.router)
 app.include_router(vision.router)
+app.include_router(voice.router)
 app.include_router(stats.router)
 app.include_router(jobs.router)
 

@@ -75,6 +75,14 @@ class ImageAskResponse(BaseModel):
     answer: str
 
 
+class TranscriptionResponse(BaseModel):
+    text: str
+
+
+class SpeakRequest(BaseModel):
+    text: str
+
+
 class StatsResponse(BaseModel):
     documents: int
     chunks: int

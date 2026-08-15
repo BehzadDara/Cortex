@@ -18,9 +18,12 @@ import {
   getConversations,
   renameConversation,
   resumeAssistant,
+  speakText,
   streamAssistant,
   submitFeedback,
+  transcribeAudio,
 } from "../api";
+import { Recorder } from "../audio";
 import type {
   ConversationSummary,
   Feedback,
@@ -147,6 +150,34 @@ function TrashIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" x2="12" y1="19" y2="22" />
+    </svg>
+  );
+}
+
+function StopIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  );
+}
+
+function SpeakerIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
     </svg>
   );
 }
@@ -615,11 +646,22 @@ export default function ChatView() {
   const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [voice, setVoice] = useState<"idle" | "recording" | "transcribing">(
+    "idle",
+  );
+  const [speakingId, setSpeakingId] = useState<number | null>(null);
+  const [speakingPhase, setSpeakingPhase] = useState<"loading" | "playing">(
+    "loading",
+  );
   const bottom = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const awaitingApproval = useRef(false);
   const streamAbort = useRef<AbortController | null>(null);
   const openSequence = useRef(0);
+  const recorder = useRef<Recorder | null>(null);
+  const speechAbort = useRef<AbortController | null>(null);
+  const speechPlayer = useRef<HTMLAudioElement | null>(null);
+  const speechUrl = useRef<string | null>(null);
 
   function abortActiveStream() {
     streamAbort.current?.abort();
@@ -660,6 +702,85 @@ export default function ChatView() {
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  useEffect(
+    () => () => {
+      recorder.current?.cancel();
+      stopSpeech();
+    },
+    [],
+  );
+
+  function stopSpeech() {
+    speechAbort.current?.abort();
+    speechAbort.current = null;
+    speechPlayer.current?.pause();
+    speechPlayer.current = null;
+    if (speechUrl.current) {
+      URL.revokeObjectURL(speechUrl.current);
+      speechUrl.current = null;
+    }
+    setSpeakingId(null);
+  }
+
+  async function readAloud(messageId: number, content: string) {
+    if (speakingId === messageId) {
+      stopSpeech();
+      return;
+    }
+    stopSpeech();
+    setSpeakingId(messageId);
+    setSpeakingPhase("loading");
+    const controller = new AbortController();
+    speechAbort.current = controller;
+    try {
+      const audio = await speakText(content, controller.signal);
+      if (speechAbort.current !== controller) return;
+      const url = URL.createObjectURL(audio);
+      speechUrl.current = url;
+      const player = new Audio(url);
+      speechPlayer.current = player;
+      player.onended = stopSpeech;
+      setSpeakingPhase("playing");
+      await player.play();
+    } catch (caught) {
+      if (speechAbort.current !== controller) return;
+      stopSpeech();
+      if (!isAbortError(caught)) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }
+  }
+
+  async function toggleRecording() {
+    if (voice === "recording") {
+      const active = recorder.current;
+      recorder.current = null;
+      if (!active) return;
+      setVoice("transcribing");
+      try {
+        const transcript = await transcribeAudio(await active.stop());
+        setVoice("idle");
+        if (transcript) {
+          await send(transcript);
+        } else {
+          setError("Heard nothing — try again closer to the microphone.");
+        }
+      } catch (caught) {
+        setVoice("idle");
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+      return;
+    }
+    if (voice !== "idle" || busy) return;
+    setError(null);
+    try {
+      recorder.current = await Recorder.start();
+      setVoice("recording");
+    } catch {
+      setError("Microphone unavailable — check browser permissions.");
+    }
+  }
 
   async function openConversation(target: number) {
     const sequence = ++openSequence.current;
@@ -926,8 +1047,12 @@ export default function ChatView() {
     setAttachedPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  async function submit() {
-    const trimmed = question.trim();
+  function submit() {
+    return send(question);
+  }
+
+  async function send(text: string) {
+    const trimmed = text.trim();
     if (!trimmed || busy) return;
 
     const image = attachedImage;
@@ -1116,6 +1241,36 @@ export default function ChatView() {
                         message.id !== undefined ? (
                           <span className="meta-actions">
                             <button
+                              className={
+                                speakingId === message.id
+                                  ? `meta-button speaking ${speakingPhase}`
+                                  : "meta-button"
+                              }
+                              aria-label={
+                                speakingId === message.id
+                                  ? "Stop reading aloud"
+                                  : "Read aloud"
+                              }
+                              aria-pressed={speakingId === message.id}
+                              data-tip={
+                                speakingId === message.id
+                                  ? speakingPhase === "loading"
+                                    ? "Cancel"
+                                    : "Stop reading"
+                                  : "Read aloud"
+                              }
+                              onClick={() =>
+                                readAloud(message.id!, message.content)
+                              }
+                            >
+                              {speakingId === message.id &&
+                              speakingPhase === "playing" ? (
+                                <StopIcon size={13} />
+                              ) : (
+                                <SpeakerIcon />
+                              )}
+                            </button>
+                            <button
                               className="meta-button"
                               aria-label="Create new branch"
                               data-tip="Create new branch"
@@ -1186,22 +1341,47 @@ export default function ChatView() {
               <button
                 className="ghost icon"
                 aria-label="Attach an image"
-                disabled={busy}
+                disabled={busy || voice !== "idle"}
                 onClick={() => imageInput.current?.click()}
               >
                 <PaperclipIcon />
               </button>
+              <button
+                className={
+                  voice === "recording" ? "ghost icon recording" : "ghost icon"
+                }
+                aria-label={
+                  voice === "recording"
+                    ? "Stop recording and send"
+                    : "Ask by voice"
+                }
+                aria-pressed={voice === "recording"}
+                disabled={busy || voice === "transcribing"}
+                onClick={toggleRecording}
+              >
+                {voice === "recording" ? <StopIcon /> : <MicIcon />}
+              </button>
               <input
                 className="grow"
                 placeholder={
-                  attachedImage ? "Ask about the image…" : "Ask a question…"
+                  voice === "recording"
+                    ? "Listening…"
+                    : voice === "transcribing"
+                      ? "Transcribing…"
+                      : attachedImage
+                        ? "Ask about the image…"
+                        : "Ask a question…"
                 }
                 value={question}
-                disabled={busy}
+                disabled={busy || voice !== "idle"}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && submit()}
               />
-              <button className="primary" onClick={submit} disabled={busy}>
+              <button
+                className="primary"
+                onClick={submit}
+                disabled={busy || voice !== "idle"}
+              >
                 Send
               </button>
             </div>
