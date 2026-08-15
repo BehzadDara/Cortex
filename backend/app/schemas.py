@@ -70,6 +70,10 @@ class ContinueRequest(BaseModel):
     conversation_id: int
 
 
+class StopRequest(BaseModel):
+    conversation_id: int
+
+
 class ImageAskResponse(BaseModel):
     conversation_id: int
     answer: str

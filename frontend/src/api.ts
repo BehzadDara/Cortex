@@ -284,3 +284,9 @@ export const continueAssistant = (
     handlers,
     signal,
   );
+
+export const stopAssistant = (conversationId: number) =>
+  request<{ stopped: boolean }>(
+    "/assistant/stop",
+    jsonInit("POST", { conversation_id: conversationId }),
+  );

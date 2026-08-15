@@ -19,6 +19,7 @@ import {
   renameConversation,
   resumeAssistant,
   speakText,
+  stopAssistant,
   streamAssistant,
   submitFeedback,
   transcribeAudio,
@@ -675,6 +676,21 @@ export default function ChatView() {
     const controller = new AbortController();
     streamAbort.current = controller;
     return controller.signal;
+  }
+
+  function stopGeneration() {
+    abortActiveStream();
+    if (conversationId !== null) stopAssistant(conversationId).catch(() => {});
+    discardActiveExchange();
+  }
+
+  function discardActiveExchange() {
+    const last = messages[messages.length - 1];
+    if (last?.role !== "assistant" || last.id !== undefined) return;
+    const previous = messages[messages.length - 2];
+    const dropped = previous?.role === "user" ? 2 : 1;
+    setMessages(messages.slice(0, messages.length - dropped));
+    if (previous?.role === "user") setQuestion(previous.content);
   }
 
   function refreshConversations() {
@@ -1364,26 +1380,39 @@ export default function ChatView() {
               <input
                 className="grow"
                 placeholder={
-                  voice === "recording"
-                    ? "Listening…"
-                    : voice === "transcribing"
-                      ? "Transcribing…"
-                      : attachedImage
-                        ? "Ask about the image…"
-                        : "Ask a question…"
+                  busy
+                    ? "Answering…"
+                    : voice === "recording"
+                      ? "Listening…"
+                      : voice === "transcribing"
+                        ? "Transcribing…"
+                        : attachedImage
+                          ? "Ask about the image…"
+                          : "Ask a question…"
                 }
                 value={question}
                 disabled={busy || voice !== "idle"}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && submit()}
               />
-              <button
-                className="primary"
-                onClick={submit}
-                disabled={busy || voice !== "idle"}
-              >
-                Send
-              </button>
+              {busy ? (
+                <button
+                  className="primary stop-generation"
+                  aria-label="Stop generating"
+                  onClick={stopGeneration}
+                >
+                  <StopIcon size={13} />
+                  Stop
+                </button>
+              ) : (
+                <button
+                  className="primary"
+                  onClick={submit}
+                  disabled={voice !== "idle"}
+                >
+                  Send
+                </button>
+              )}
             </div>
             {error && <p className="error">{error}</p>}
           </div>

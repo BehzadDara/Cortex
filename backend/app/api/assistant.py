@@ -55,7 +55,7 @@ from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
 from app.rag.web_search import WebSearchProvider
-from app.schemas import AskRequest, ContinueRequest, ResumeRequest
+from app.schemas import AskRequest, ContinueRequest, ResumeRequest, StopRequest
 from app.tools import (
     build_document_search,
     build_knowledge_image_search,
@@ -342,6 +342,18 @@ def continue_run(
         ),
         media_type="text/event-stream",
     )
+
+
+@router.post("/assistant/stop")
+def stop_run(
+    request: StopRequest, session: Session = Depends(get_session)
+) -> dict:
+    conversation = session.get(Conversation, request.conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation.active_thread = None
+    session.commit()
+    return {"stopped": True}
 
 
 @router.post("/assistant/resume")

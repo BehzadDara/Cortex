@@ -259,6 +259,12 @@ button.primary:disabled {
   cursor: default;
 }
 
+button.primary.stop-generation {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 button.ghost {
   background: var(--surface);
   border: 1px solid var(--border-strong);
