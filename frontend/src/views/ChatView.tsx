@@ -596,6 +596,7 @@ export default function ChatView() {
   const imageInput = useRef<HTMLInputElement>(null);
   const awaitingApproval = useRef(false);
   const streamAbort = useRef<AbortController | null>(null);
+  const openSequence = useRef(0);
 
   function abortActiveStream() {
     streamAbort.current?.abort();
@@ -605,6 +606,7 @@ export default function ChatView() {
   }
 
   function startStream(): AbortSignal {
+    streamAbort.current?.abort();
     const controller = new AbortController();
     streamAbort.current = controller;
     return controller.signal;
@@ -620,6 +622,7 @@ export default function ChatView() {
 
   useEffect(() => {
     if (routeId === null) {
+      openSequence.current++;
       abortActiveStream();
       setConversationId(null);
       setMessages([]);
@@ -636,8 +639,10 @@ export default function ChatView() {
   }, [messages]);
 
   async function openConversation(target: number) {
+    const sequence = ++openSequence.current;
     try {
       const conversation = await getConversation(target);
+      if (sequence !== openSequence.current) return;
       setConversationId(target);
       setError(null);
       setBranch(
@@ -679,6 +684,7 @@ export default function ChatView() {
         continueRun(target);
       }
     } catch (caught) {
+      if (sequence !== openSequence.current) return;
       setError(caught instanceof Error ? caught.message : String(caught));
     }
   }
