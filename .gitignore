@@ -15,6 +15,9 @@ dist/
 backend/generated_images/
 backend/knowledge_images/
 
+# Voice model weights
+backend/voice_models/
+
 # Environment
 .env
 .env.*

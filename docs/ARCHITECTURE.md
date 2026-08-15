@@ -73,6 +73,20 @@ Business logic depends on interfaces only. Each concrete provider is one impleme
 
 LangGraph sits outside this table on purpose: it orchestrates control flow (the assistant's model ⇄ tools cycle, checkpointing, interrupts) but never talks to a model or database itself — swapping any provider still touches one file.
 
+## Models
+
+| Model                                | Runs via                          | Used for                                                                                       |
+| ------------------------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| qwen3:4b                             | Ollama                            | Assistant answers and tool orchestration (thinking enabled, reasoning discarded); conversation summaries |
+| gemma3:4b                            | Ollama                            | Routing (`route` node), conversation titles, and vision: OCR, image captions, `/ask-image`     |
+| nomic-embed-text                     | Ollama                            | Embeddings for chunks, image captions, and queries                                             |
+| ms-marco-MiniLM-L-6-v2               | In-process (sentence-transformers)| Cross-encoder re-ranking and relevance gating in the retrieval funnel                          |
+| whisper-large-v3-turbo               | In-process (mlx-whisper)          | Speech-to-text for voice input — step 23                                                       |
+| Kokoro v1.0                          | In-process (kokoro-onnx)          | Text-to-speech for reading answers aloud — step 24                                             |
+| Pollinations (hosted)                | Remote keyless API                | `generate_image` — the one deliberate exception to local-first; only the draw-prompt leaves the machine |
+
+Everything except Pollinations runs on the local machine. The Ollama models are pulled once with `ollama pull`; the cross-encoder and Whisper download to the Hugging Face cache on first use; Kokoro's weights live in `backend/voice_models/` (gitignored). The in-process models load inside the FastAPI backend — starting the backend is all it takes, no extra service to run.
+
 ## Data flow
 
 **Ingestion:** upload → parse → chunk → embed → store.
