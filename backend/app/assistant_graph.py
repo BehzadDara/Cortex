@@ -56,13 +56,17 @@ SYSTEM_PROMPT = (
     "Use web_image_search when the user asks to see or find existing "
     "photos or pictures of something and the document searches attached "
     "none — never to create new images. "
+    "Use web_video_search when the user asks to watch, play, or find a "
+    "video of something — never to create one, and never for photos or "
+    "still images. "
     "Document and web searches may attach related images; they are "
     "already shown to the user, so mention them briefly at most and never "
     "describe them in detail. "
     "world_clock, get_weather, crypto_price, kb_stats, usage_stats, "
-    "generate_image, and web_image_search each render a visual card in "
-    "the interface, so after calling one, answer in one short sentence and "
-    "never repeat the card's numbers in a list or table. "
+    "generate_image, web_image_search, and web_video_search each render a "
+    "visual card in the interface, so after calling one, answer in one "
+    "short sentence and never repeat the card's numbers in a list or "
+    "table. "
     "Document passages and web results are labeled with bracketed numbers "
     "like [1]. When a claim in your answer comes from one, cite its number "
     "right after the claim, like [1] or [2][3]. "
@@ -80,7 +84,7 @@ FALLBACK_ANSWER = "I could not finish answering within the tool call limit."
 
 DECLINED_RESULT = "The user declined the web search."
 
-APPROVAL_TOOLS = {"web_search", "web_image_search"}
+APPROVAL_TOOLS = {"web_search", "web_image_search", "web_video_search"}
 
 RESULT_PREVIEW_CHARS = 500
 

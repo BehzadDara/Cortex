@@ -101,7 +101,20 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
     running: "Searching web images",
     done: "Searched web images",
   },
+  web_video_search: {
+    running: "Searching web videos",
+    done: "Searched web videos",
+  },
 };
+
+const APPROVAL_PROMPTS: Record<string, string> = {
+  web_image_search: "Cortex wants to search the web for images of ",
+  web_video_search: "Cortex wants to search the web for videos of ",
+};
+
+function approvalPrompt(name: string): string {
+  return APPROVAL_PROMPTS[name] ?? "Cortex wants to search the web for ";
+}
 
 function stepLabel(step: ToolStep): string {
   const labels = STEP_LABELS[step.name] ?? {
@@ -255,6 +268,15 @@ function ImageIcon() {
   );
 }
 
+function VideoIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+      <rect x="2" y="6" width="14" height="12" rx="2" />
+    </svg>
+  );
+}
+
 const STEP_ICONS: Record<string, ComponentType> = {
   search_documents: SearchIcon,
   web_search: GlobeIcon,
@@ -267,6 +289,7 @@ const STEP_ICONS: Record<string, ComponentType> = {
   usage_stats: ChartIcon,
   generate_image: ImageIcon,
   web_image_search: ImageIcon,
+  web_video_search: VideoIcon,
 };
 
 function DownloadIcon() {
@@ -1049,9 +1072,7 @@ export default function ChatView() {
                     <div className="approval-text">
                       <GlobeIcon />
                       <span>
-                        {message.approval.name === "web_image_search"
-                          ? "Cortex wants to search the web for images of "
-                          : "Cortex wants to search the web for "}
+                        {approvalPrompt(message.approval.name)}
                         <strong>
                           {String(message.approval.arguments.query ?? "")}
                         </strong>

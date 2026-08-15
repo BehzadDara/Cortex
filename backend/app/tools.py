@@ -1,5 +1,6 @@
 import ast
 import operator
+import re
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -20,7 +21,13 @@ from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks, retrieve_images
 from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
-from app.rag.web_search import ImageSearchProvider, WebImage, WebSearchProvider
+from app.rag.web_search import (
+    ImageSearchProvider,
+    VideoSearchProvider,
+    WebImage,
+    WebSearchProvider,
+    WebVideo,
+)
 
 
 @dataclass
@@ -404,24 +411,22 @@ def download_web_images(
     return entries
 
 
-IMAGE_SEARCH_RETRY_DELAY_SECONDS = 2
+SEARCH_RETRY_DELAY_SECONDS = 2
 
 
-def search_images_with_retry(
-    image_search: ImageSearchProvider, query: str
-) -> list[WebImage]:
+def search_with_retry(provider, query: str):
     try:
-        return image_search.search(query)
+        return provider.search(query)
     except Exception:
-        time.sleep(IMAGE_SEARCH_RETRY_DELAY_SECONDS)
-        return image_search.search(query)
+        time.sleep(SEARCH_RETRY_DELAY_SECONDS)
+        return provider.search(query)
 
 
 def build_web_image_gallery(
     image_search: ImageSearchProvider, file_store: FileStore, reranker: Reranker
 ):
     def find_web_images(query: str) -> list[dict]:
-        results = search_images_with_retry(image_search, query)
+        results = search_with_retry(image_search, query)
         if results and settings.rerank:
             scores = reranker.rerank(query, [result.title for result in results])
             scored = sorted(
@@ -442,7 +447,7 @@ def build_web_image_tool(
 ) -> Tool:
     def web_image_search(query: str) -> ToolOutput:
         try:
-            results = search_images_with_retry(image_search, query)
+            results = search_with_retry(image_search, query)
         except Exception:
             results = []
         entries = download_web_images(results, file_store)
@@ -469,6 +474,81 @@ def build_web_image_tool(
         ),
         parameters=SEARCH_PARAMETERS,
         run=web_image_search,
+    )
+
+
+WEB_VIDEO_DISPLAY_COUNT = 3
+
+YOUTUBE_EMBED_BASE = "https://www.youtube.com/embed/"
+
+YOUTUBE_ID_PATTERN = re.compile(
+    r"(?:youtube(?:-nocookie)?\.com/(?:embed/|watch\?v=)|youtu\.be/)([\w-]{6,})"
+)
+
+
+def youtube_video_id(video: WebVideo) -> str | None:
+    for url in (video.embed_url, video.page_url):
+        match = YOUTUBE_ID_PATTERN.search(url or "")
+        if match:
+            return match.group(1)
+    return None
+
+
+def video_entry(video: WebVideo, video_id: str) -> dict:
+    return {
+        "title": video.title,
+        "embed_url": YOUTUBE_EMBED_BASE + video_id,
+        "page_url": video.page_url,
+        "thumbnail_url": video.thumbnail_url,
+        "duration": video.duration,
+        "channel": video.channel,
+    }
+
+
+def embeddable_videos(results: list[WebVideo]) -> list[dict]:
+    entries: list[dict] = []
+    seen: set[str] = set()
+    for video in results:
+        video_id = youtube_video_id(video)
+        if video_id is None or video_id in seen:
+            continue
+        seen.add(video_id)
+        entries.append(video_entry(video, video_id))
+        if len(entries) >= WEB_VIDEO_DISPLAY_COUNT:
+            break
+    return entries
+
+
+def build_web_video_tool(video_search: VideoSearchProvider) -> Tool:
+    def web_video_search(query: str) -> ToolOutput:
+        try:
+            results = search_with_retry(video_search, query)
+        except Exception:
+            results = []
+        entries = embeddable_videos(results)
+        if not entries:
+            return ToolOutput(text=f"No web videos found for '{query}'.")
+        titles = "; ".join(entry["title"] for entry in entries)
+        return ToolOutput(
+            text=(
+                f"Found {len(entries)} videos and opened them in the video "
+                f"player: {titles}"
+            ),
+            widget=Widget(
+                kind="video_player", data={"query": query, "videos": entries}
+            ),
+        )
+
+    return Tool(
+        name="web_video_search",
+        description=(
+            "Search the web for videos about something and play them for "
+            "the user in an embedded video player. Use it when the user "
+            "asks to watch, play, or find a video of a topic — never when "
+            "they ask you to create one."
+        ),
+        parameters=SEARCH_PARAMETERS,
+        run=web_video_search,
     )
 
 
@@ -578,6 +658,7 @@ def build_tools(
     market_data: MarketDataProvider,
     image_generator: ImageGenerator,
     image_search: ImageSearchProvider,
+    video_search: VideoSearchProvider,
     generated_image_store: FileStore,
     web_image_store: FileStore,
 ) -> list[Tool]:
@@ -620,4 +701,5 @@ def build_tools(
         build_usage_stats_tool(session),
         build_image_tool(image_generator, generated_image_store),
         build_web_image_tool(image_search, web_image_store),
+        build_web_video_tool(video_search),
     ]

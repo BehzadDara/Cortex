@@ -16,8 +16,10 @@ from app.rag.vision import OllamaVisionProvider, VisionProvider
 from app.rag.weather import OpenMeteoWeather, WeatherProvider
 from app.rag.web_search import (
     DdgsImageSearch,
+    DdgsVideoSearch,
     DdgsWebSearch,
     ImageSearchProvider,
+    VideoSearchProvider,
     WebSearchProvider,
 )
 
@@ -85,6 +87,11 @@ def get_web_search() -> WebSearchProvider:
 @lru_cache
 def get_image_search() -> ImageSearchProvider:
     return DdgsImageSearch()
+
+
+@lru_cache
+def get_video_search() -> VideoSearchProvider:
+    return DdgsVideoSearch()
 
 
 @lru_cache

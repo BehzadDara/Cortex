@@ -40,5 +40,9 @@
   { "question": "Draw a picture of a lighthouse in a storm.", "needs_documents": false },
   { "question": "Generate an image of a futuristic city at night.", "needs_documents": false },
   { "question": "Can you make me a watercolor painting of Saturn?", "needs_documents": false },
-  { "question": "Now as a photo instead.", "previous": "Can you make me a watercolor painting of Saturn?", "needs_documents": false }
+  { "question": "Now as a photo instead.", "previous": "Can you make me a watercolor painting of Saturn?", "needs_documents": false },
+  { "question": "Show me a video of how to make sushi.", "needs_documents": false },
+  { "question": "Find a YouTube video about the James Webb telescope.", "needs_documents": false },
+  { "question": "Can I watch a tutorial video on knife sharpening?", "needs_documents": false },
+  { "question": "Now one about ramen.", "previous": "Show me a video of how to make sushi.", "needs_documents": false }
 ]

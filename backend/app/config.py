@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     image_top_k: int = 3
     image_min_relevance: float = 0.0
     web_image_results: int = 8
+    web_video_results: int = 8
     ocr_max_pages: int = 5
     embedding_model: str = "nomic-embed-text"
     embedding_dimensions: int = 768

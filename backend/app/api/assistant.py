@@ -37,6 +37,7 @@ from app.dependencies import (
     get_reranker,
     get_session,
     get_vector_store,
+    get_video_search,
     get_weather_provider,
     get_web_search,
 )
@@ -86,6 +87,7 @@ def build_graph(
         market_data,
         image_generator,
         get_image_search(),
+        get_video_search(),
         get_generated_image_store(),
         get_knowledge_image_store(),
     )

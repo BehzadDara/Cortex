@@ -55,3 +55,42 @@ class DdgsImageSearch:
             for hit in hits
             if hit.get("image")
         ]
+
+
+@dataclass
+class WebVideo:
+    title: str
+    page_url: str
+    embed_url: str | None
+    thumbnail_url: str | None
+    duration: str | None
+    channel: str | None
+
+
+class VideoSearchProvider(Protocol):
+    def search(self, query: str) -> list[WebVideo]: ...
+
+
+def video_thumbnail(hit: dict) -> str | None:
+    images = hit.get("images") or {}
+    return images.get("large") or images.get("medium") or images.get("small")
+
+
+class DdgsVideoSearch:
+    def search(self, query: str) -> list[WebVideo]:
+        from ddgs import DDGS
+
+        with DDGS() as client:
+            hits = client.videos(query, max_results=settings.web_video_results)
+        return [
+            WebVideo(
+                title=hit.get("title") or query,
+                page_url=hit["content"],
+                embed_url=hit.get("embed_url") or None,
+                thumbnail_url=video_thumbnail(hit),
+                duration=hit.get("duration") or None,
+                channel=hit.get("uploader") or hit.get("publisher") or None,
+            )
+            for hit in hits
+            if hit.get("content")
+        ]

@@ -877,6 +877,156 @@ function ImageGalleryCard({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+interface VideoEntry {
+  title: string;
+  embed_url: string;
+  page_url: string;
+  thumbnail_url: string | null;
+  duration: string | null;
+  channel: string | null;
+}
+
+interface VideoPlayerData {
+  query: string;
+  videos: VideoEntry[];
+}
+
+function PlayIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+      <polygon points="8 5 19 12 8 19 8 5" />
+    </svg>
+  );
+}
+
+function VideoThumbnail({ video }: { video: VideoEntry }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !video.thumbnail_url) return null;
+  return (
+    <img
+      src={video.thumbnail_url}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function VideoStage({
+  video,
+  playing,
+  onPlay,
+}: {
+  video: VideoEntry;
+  playing: boolean;
+  onPlay: () => void;
+}) {
+  if (playing) {
+    return (
+      <iframe
+        className="video-frame"
+        src={`${video.embed_url}?autoplay=1&rel=0`}
+        title={video.title}
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="video-stage"
+      onClick={onPlay}
+      aria-label={`Play video: ${video.title}`}
+    >
+      <VideoThumbnail video={video} />
+      <span className="video-play-badge">
+        <PlayIcon />
+      </span>
+      {video.duration && <span className="video-duration">{video.duration}</span>}
+    </button>
+  );
+}
+
+function VideoRow({ video, onPlay }: { video: VideoEntry; onPlay: () => void }) {
+  return (
+    <button
+      type="button"
+      className="video-row"
+      onClick={onPlay}
+      aria-label={`Play video: ${video.title}`}
+    >
+      <span className="video-row-thumb">
+        <VideoThumbnail video={video} />
+        {video.duration && (
+          <span className="video-duration">{video.duration}</span>
+        )}
+      </span>
+      <span className="video-row-text">
+        <span className="video-row-title">{video.title}</span>
+        {video.channel && (
+          <span className="video-row-channel">{video.channel}</span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+function VideoPlayerCard({ data }: { data: Record<string, unknown> }) {
+  const player = data as unknown as VideoPlayerData;
+  const videos = (player.videos ?? []).filter((video) => video.embed_url);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  if (videos.length === 0) return null;
+  const active = videos[Math.min(activeIndex, videos.length - 1)];
+
+  return (
+    <div
+      className="widget-card video-card"
+      role="group"
+      aria-label={`${videos.length} ${videos.length === 1 ? "video" : "videos"}`}
+    >
+      <span className="widget-title">Videos</span>
+      <VideoStage
+        video={active}
+        playing={playing}
+        onPlay={() => setPlaying(true)}
+      />
+      <div className="video-meta">
+        <span className="video-title">{active.title}</span>
+        <a
+          className="gallery-source"
+          href={active.page_url}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Watch on YouTube: ${active.title}`}
+        >
+          <ExternalLinkIcon />
+          <span className="gallery-source-name">
+            {active.channel ? `YouTube · ${active.channel}` : "YouTube"}
+          </span>
+        </a>
+      </div>
+      {videos.length > 1 && (
+        <div className="video-list">
+          {videos.map((video, index) =>
+            index === activeIndex ? null : (
+              <VideoRow
+                key={video.embed_url}
+                video={video}
+                onPlay={() => {
+                  setActiveIndex(index);
+                  setPlaying(true);
+                }}
+              />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const WIDGET_COMPONENTS: Record<
   string,
   ComponentType<{ data: Record<string, unknown> }>
@@ -888,6 +1038,7 @@ const WIDGET_COMPONENTS: Record<
   usage: UsageCard,
   image: ImageCard,
   image_gallery: ImageGalleryCard,
+  video_player: VideoPlayerCard,
 };
 
 export function WidgetCard({ widget }: { widget: Widget }) {
