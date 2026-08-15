@@ -1,68 +1,77 @@
-const TARGET_SAMPLE_RATE = 16000;
+const RECORDER_WORKLET = `
+class RecorderProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const channel = inputs[0][0];
+    if (channel) this.port.postMessage(channel.slice(0));
+    return true;
+  }
+}
+registerProcessor("recorder", RecorderProcessor);
+`;
 
 export class Recorder {
   private constructor(
-    private recorder: MediaRecorder,
-    private chunks: Blob[],
+    private context: AudioContext,
+    private stream: MediaStream,
+    private chunks: Float32Array[],
   ) {}
 
   static async start(): Promise<Recorder> {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    };
-    recorder.start();
-    return new Recorder(recorder, chunks);
+    const context = new AudioContext();
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      await loadRecorderWorklet(context);
+      if (context.state === "suspended") await context.resume();
+      const chunks: Float32Array[] = [];
+      const recorder = new AudioWorkletNode(context, "recorder");
+      recorder.port.onmessage = (event) => chunks.push(event.data);
+      context.createMediaStreamSource(stream).connect(recorder);
+      recorder.connect(context.destination);
+      return new Recorder(context, stream, chunks);
+    } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
+      await context.close();
+      throw error;
+    }
   }
 
   async stop(): Promise<Blob> {
-    const recording = await this.finish();
-    return toWav(recording);
+    const sampleRate = this.context.sampleRate;
+    await this.release();
+    return encodeWavPcm16(concatenate(this.chunks), sampleRate);
   }
 
-  cancel(): void {
-    if (this.recorder.state !== "inactive") this.recorder.stop();
-    this.releaseStream();
+  async cancel(): Promise<void> {
+    await this.release();
   }
 
-  private finish(): Promise<Blob> {
-    return new Promise((resolve) => {
-      this.recorder.onstop = () => {
-        this.releaseStream();
-        resolve(new Blob(this.chunks, { type: this.recorder.mimeType }));
-      };
-      this.recorder.stop();
-    });
-  }
-
-  private releaseStream(): void {
-    for (const track of this.recorder.stream.getTracks()) track.stop();
+  private async release(): Promise<void> {
+    for (const track of this.stream.getTracks()) track.stop();
+    if (this.context.state !== "closed") await this.context.close();
   }
 }
 
-async function toWav(recording: Blob): Promise<Blob> {
-  const samples = await monoSamples(recording);
-  return encodeWavPcm16(samples, TARGET_SAMPLE_RATE);
-}
-
-async function monoSamples(recording: Blob): Promise<Float32Array> {
-  const data = await recording.arrayBuffer();
-  const context = new AudioContext();
+async function loadRecorderWorklet(context: AudioContext): Promise<void> {
+  const module = URL.createObjectURL(
+    new Blob([RECORDER_WORKLET], { type: "application/javascript" }),
+  );
   try {
-    const decoded = await context.decodeAudioData(data);
-    const length = Math.max(1, Math.round(decoded.duration * TARGET_SAMPLE_RATE));
-    const offline = new OfflineAudioContext(1, length, TARGET_SAMPLE_RATE);
-    const source = offline.createBufferSource();
-    source.buffer = decoded;
-    source.connect(offline.destination);
-    source.start();
-    const rendered = await offline.startRendering();
-    return rendered.getChannelData(0);
+    await context.audioWorklet.addModule(module);
   } finally {
-    await context.close();
+    URL.revokeObjectURL(module);
   }
+}
+
+function concatenate(chunks: Float32Array[]): Float32Array {
+  const total = chunks.reduce((length, chunk) => length + chunk.length, 0);
+  const samples = new Float32Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    samples.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return samples;
 }
 
 function encodeWavPcm16(samples: Float32Array, sampleRate: number): Blob {

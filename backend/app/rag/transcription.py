@@ -17,9 +17,10 @@ class WhisperSpeechToText:
     def transcribe(self, audio: bytes) -> str:
         import mlx_whisper
 
-        result = mlx_whisper.transcribe(
-            waveform(audio), path_or_hf_repo=settings.stt_model
-        )
+        samples = waveform(audio)
+        if samples.size == 0:
+            return ""
+        result = mlx_whisper.transcribe(samples, path_or_hf_repo=settings.stt_model)
         return result["text"].strip()
 
 
