@@ -285,6 +285,40 @@ export const continueAssistant = (
     signal,
   );
 
+export const regenerateMessage = (
+  messageId: number,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+) =>
+  streamEvents(
+    `/messages/${messageId}/regenerate`,
+    { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    handlers,
+    signal,
+  );
+
+export const editMessage = (
+  messageId: number,
+  content: string,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+) =>
+  streamEvents(
+    `/messages/${messageId}/edit`,
+    {
+      content,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    handlers,
+    signal,
+  );
+
+export const selectVariant = (messageId: number) =>
+  request<{ messages: ConversationDetail["messages"] }>(
+    `/messages/${messageId}/select`,
+    { method: "PUT" },
+  );
+
 export const stopAssistant = (conversationId: number) =>
   request<{ stopped: boolean }>(
     "/assistant/stop",

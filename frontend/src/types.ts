@@ -48,7 +48,6 @@ export type Feedback = "like" | "dislike";
 
 export interface ConversationDetail {
   id: number;
-  summary: string | null;
   active_thread: string | null;
   branched_from_id: number | null;
   branched_from_title: string | null;
@@ -57,6 +56,10 @@ export interface ConversationDetail {
     id: number;
     role: string;
     content: string;
+    parent_id: number | null;
+    variant_index: number;
+    variant_count: number;
+    variant_ids: number[];
     steps: ToolStep[] | null;
     sources: Source[] | null;
     widgets: Widget[] | null;

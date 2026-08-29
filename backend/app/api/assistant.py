@@ -43,8 +43,9 @@ from app.dependencies import (
 )
 from app.models import Conversation, PromptLog
 from app.rag.conversation import (
-    conversation_messages,
-    save_exchange,
+    history_for,
+    leaf_of,
+    save_run,
     summarize_if_due,
 )
 from app.rag.embeddings import EmbeddingProvider
@@ -124,10 +125,14 @@ def format_transcript(messages: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def set_active_thread(
-    session: Session, conversation: Conversation, thread_id: str
+def start_run(
+    session: Session,
+    conversation: Conversation,
+    thread_id: str,
+    parent_id: int | None,
 ) -> None:
     conversation.active_thread = thread_id
+    conversation.active_parent_id = parent_id
     session.commit()
 
 
@@ -136,6 +141,7 @@ def clear_active_thread(conversation_id: int) -> None:
         conversation = session.get(Conversation, conversation_id)
         if conversation is not None:
             conversation.active_thread = None
+            conversation.active_parent_id = None
             session.commit()
 
 
@@ -168,6 +174,7 @@ def stream_events(
     graph_input,
     thread_id: str,
     conversation_id: int,
+    parent_id: int | None,
     holder: dict | None,
     llm: LLMProvider,
     snapshot: dict | None = None,
@@ -210,8 +217,9 @@ def stream_events(
         )
         question = state_question(final_state)
         answer = final_answer(final_state)
-        message_id = save_exchange(
+        message_id = save_run(
             conversation_id,
+            parent_id,
             question,
             answer,
             steps=extract_steps(final_state["messages"]),
@@ -258,7 +266,9 @@ def assistant(
     if is_new:
         start_title_generation(fast_llm, conversation.id, request.question, title_holder)
 
-    history = conversation_messages(conversation)
+    leaf = leaf_of(session, conversation)
+    parent_id = leaf.id if leaf else None
+    history = history_for(session, conversation)
     graph = build_graph(
         session,
         embeddings,
@@ -272,13 +282,14 @@ def assistant(
         image_generator,
     )
     thread_id = uuid4().hex
-    set_active_thread(session, conversation, thread_id)
+    start_run(session, conversation, thread_id, parent_id)
     return StreamingResponse(
         stream_events(
             graph,
             initial_state(history, request.question, request.timezone),
             thread_id,
             conversation.id,
+            parent_id,
             title_holder if is_new else None,
             llm,
         ),
@@ -336,6 +347,7 @@ def continue_run(
             None,
             thread_id,
             conversation.id,
+            conversation.active_parent_id,
             None,
             llm,
             snapshot=snapshot,
@@ -352,6 +364,7 @@ def stop_run(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     conversation.active_thread = None
+    conversation.active_parent_id = None
     session.commit()
     return {"stopped": True}
 
@@ -370,7 +383,8 @@ def resume(
     market_data: MarketDataProvider = Depends(get_market_data_provider),
     image_generator: ImageGenerator = Depends(get_image_generator),
 ) -> StreamingResponse:
-    if session.get(Conversation, request.conversation_id) is None:
+    conversation = session.get(Conversation, request.conversation_id)
+    if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     graph = build_graph(
@@ -391,6 +405,7 @@ def resume(
             Command(resume=request.approved),
             request.thread,
             request.conversation_id,
+            conversation.active_parent_id,
             None,
             llm,
         ),

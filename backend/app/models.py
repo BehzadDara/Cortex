@@ -86,9 +86,13 @@ class Conversation(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str | None]
-    summary: Mapped[str | None] = mapped_column(Text)
-    summarized_count: Mapped[int] = mapped_column(default=0)
     active_thread: Mapped[str | None]
+    active_root_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
+    active_parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
     branched_from_id: Mapped[int | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="SET NULL")
     )
@@ -101,6 +105,7 @@ class Conversation(Base):
         back_populates="conversation",
         cascade="all, delete-orphan",
         order_by="Message.id",
+        foreign_keys="Message.conversation_id",
     )
 
 
@@ -109,8 +114,16 @@ class Message(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE")
+    )
+    active_child_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL")
+    )
     role: Mapped[str]
     content: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(Text)
+    summarized_depth: Mapped[int | None]
     steps: Mapped[list | None] = mapped_column(JSONB)
     sources: Mapped[list | None] = mapped_column(JSONB)
     widgets: Mapped[list | None] = mapped_column(JSONB)
@@ -122,7 +135,9 @@ class Message(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    conversation: Mapped[Conversation] = relationship(back_populates="messages")
+    conversation: Mapped[Conversation] = relationship(
+        back_populates="messages", foreign_keys=[conversation_id]
+    )
 
 
 class PromptLog(Base):

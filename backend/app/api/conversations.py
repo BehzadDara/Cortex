@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.dependencies import get_session
-from app.models import Conversation
+from app.models import Conversation, Message
+from app.rag.conversation import path_messages, siblings_of
 from app.schemas import (
     ConversationRename,
     ConversationResponse,
@@ -21,12 +22,33 @@ def fallback_title(conversation: Conversation) -> str:
     return first_user.content if first_user else "New chat"
 
 
+def to_message_response(session: Session, message: Message) -> MessageResponse:
+    siblings = siblings_of(session, message)
+    return MessageResponse(
+        id=message.id,
+        role=message.role,
+        content=message.content,
+        parent_id=message.parent_id,
+        variant_index=siblings.index(message) + 1,
+        variant_count=len(siblings),
+        variant_ids=[sibling.id for sibling in siblings],
+        steps=message.steps,
+        sources=message.sources,
+        widgets=message.widgets,
+        feedback=message.feedback,
+        elapsed_ms=message.elapsed_ms,
+        prompt_tokens=message.prompt_tokens,
+        response_tokens=message.response_tokens,
+    )
+
+
 def to_summary(conversation: Conversation) -> ConversationSummary:
     title = conversation.title or fallback_title(conversation)
+    session = object_session(conversation)
     return ConversationSummary(
         id=conversation.id,
         title=title[:80],
-        message_count=len(conversation.messages),
+        message_count=len(path_messages(session, conversation)),
         created_at=conversation.created_at,
     )
 
@@ -83,7 +105,6 @@ def get_conversation(
     )
     return ConversationResponse(
         id=conversation.id,
-        summary=conversation.summary,
         active_thread=conversation.active_thread,
         branched_from_id=conversation.branched_from_id,
         branched_from_title=(
@@ -91,18 +112,7 @@ def get_conversation(
         ),
         branched_count=conversation.branched_count,
         messages=[
-            MessageResponse(
-                id=message.id,
-                role=message.role,
-                content=message.content,
-                steps=message.steps,
-                sources=message.sources,
-                widgets=message.widgets,
-                feedback=message.feedback,
-                elapsed_ms=message.elapsed_ms,
-                prompt_tokens=message.prompt_tokens,
-                response_tokens=message.response_tokens,
-            )
-            for message in conversation.messages
+            to_message_response(session, message)
+            for message in path_messages(session, conversation)
         ],
     )

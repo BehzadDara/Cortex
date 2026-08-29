@@ -8,7 +8,7 @@ from app.dependencies import (
     get_session,
     get_vision_provider,
 )
-from app.rag.conversation import save_exchange, summarize_if_due
+from app.rag.conversation import leaf_of, save_exchange, summarize_if_due
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_image_question_prompt
 from app.rag.vision import VisionProvider
@@ -34,6 +34,12 @@ def ask_image(
         start_title_generation(fast_llm, conversation.id, question, {})
 
     answer = vision.describe(file.file.read(), build_image_question_prompt(question))
-    save_exchange(conversation.id, f"{question} (image: {file.filename})", answer)
+    leaf = leaf_of(session, conversation)
+    save_exchange(
+        conversation.id,
+        leaf.id if leaf else None,
+        f"{question} (image: {file.filename})",
+        answer,
+    )
     summarize_if_due(conversation.id, llm)
     return ImageAskResponse(conversation_id=conversation.id, answer=answer)

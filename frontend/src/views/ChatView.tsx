@@ -14,10 +14,13 @@ import {
   branchConversation,
   continueAssistant,
   deleteConversation,
+  editMessage,
   getConversation,
   getConversations,
+  regenerateMessage,
   renameConversation,
   resumeAssistant,
+  selectVariant,
   speakText,
   stopAssistant,
   streamAssistant,
@@ -26,6 +29,7 @@ import {
 } from "../api";
 import { Recorder } from "../audio";
 import type {
+  ConversationDetail,
   ConversationSummary,
   Feedback,
   Source,
@@ -64,6 +68,9 @@ interface ChatMessage {
   approval?: Approval;
   usage?: Usage;
   feedback?: Feedback | null;
+  variantIndex?: number;
+  variantCount?: number;
+  variantIds?: number[];
 }
 
 function formatDuration(ms: number): string {
@@ -489,6 +496,36 @@ function AnswerBody({
   );
 }
 
+type StoredMessage = ConversationDetail["messages"][number];
+
+function toChatMessage(message: StoredMessage): ChatMessage {
+  const parsed =
+    message.role === "user"
+      ? parseStoredContent(message.content)
+      : { content: message.content, attachment: undefined };
+  return {
+    id: message.id,
+    role: message.role === "user" ? "user" : "assistant",
+    content: parsed.content,
+    attachment: parsed.attachment,
+    steps: message.steps ?? undefined,
+    sources: message.sources ?? undefined,
+    widgets: message.widgets ?? undefined,
+    feedback: message.feedback,
+    variantIndex: message.variant_index,
+    variantCount: message.variant_count,
+    variantIds: message.variant_ids,
+    usage:
+      message.prompt_tokens !== null && message.response_tokens !== null
+        ? {
+            elapsed_ms: message.elapsed_ms,
+            prompt_tokens: message.prompt_tokens,
+            response_tokens: message.response_tokens,
+          }
+        : undefined,
+  };
+}
+
 function BranchIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -497,6 +534,80 @@ function BranchIcon() {
       <circle cx="6" cy="18" r="3" />
       <path d="M18 9a9 9 0 0 1-9 9" />
     </svg>
+  );
+}
+
+function RegenerateIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function VariantSwitcher({
+  index,
+  count,
+  busy,
+  onStep,
+}: {
+  index: number;
+  count: number;
+  busy: boolean;
+  onStep: (delta: number) => void;
+}) {
+  return (
+    <span className="variants" role="group" aria-label={`Response ${index} of ${count}`}>
+      <button
+        className="variant-arrow"
+        aria-label="Previous response"
+        data-tip="Previous response"
+        disabled={busy || index <= 1}
+        onClick={() => onStep(-1)}
+      >
+        <ChevronLeftIcon />
+      </button>
+      <span className="variant-count" aria-live="polite">
+        {index}/{count}
+      </span>
+      <button
+        className="variant-arrow"
+        aria-label="Next response"
+        data-tip="Next response"
+        disabled={busy || index >= count}
+        onClick={() => onStep(1)}
+      >
+        <ChevronRightIcon />
+      </button>
+    </span>
   );
 }
 
@@ -652,6 +763,7 @@ export default function ChatView() {
   const [attachedImage, setAttachedImage] = useState<File | null>(null);
   const [attachedPreview, setAttachedPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<{ index: number; draft: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [voice, setVoice] = useState<"idle" | "recording" | "transcribing">(
     "idle",
@@ -820,32 +932,7 @@ export default function ChatView() {
             }
           : null,
       );
-      setMessages(
-        conversation.messages.map((message) => {
-          const parsed =
-            message.role === "user"
-              ? parseStoredContent(message.content)
-              : { content: message.content };
-          return {
-            id: message.id,
-            role: message.role === "user" ? ("user" as const) : ("assistant" as const),
-            content: parsed.content,
-            attachment: parsed.attachment,
-            steps: message.steps ?? undefined,
-            sources: message.sources ?? undefined,
-            widgets: message.widgets ?? undefined,
-            feedback: message.feedback,
-            usage:
-              message.prompt_tokens !== null && message.response_tokens !== null
-                ? {
-                    elapsed_ms: message.elapsed_ms,
-                    prompt_tokens: message.prompt_tokens,
-                    response_tokens: message.response_tokens,
-                  }
-                : undefined,
-          };
-        }),
-      );
+      setMessages(conversation.messages.map(toChatMessage));
       if (conversation.active_thread) {
         continueRun(target);
       }
@@ -975,6 +1062,61 @@ export default function ChatView() {
       current.map((message, position) =>
         position === index ? { ...message, feedback } : message,
       ),
+    );
+  }
+
+  async function switchVariant(index: number, delta: number) {
+    const message = messages[index];
+    const ids = message.variantIds ?? [];
+    const target = ids[(message.variantIndex ?? 1) - 1 + delta];
+    if (target === undefined) return;
+    try {
+      const path = await selectVariant(target);
+      setMessages(path.messages.map(toChatMessage));
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function runVariant(
+    keep: ChatMessage[],
+    start: () => Promise<void>,
+  ) {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    setMessages([...keep, { role: "assistant", content: PENDING_LABEL, pending: true }]);
+    try {
+      await start();
+      if (conversationId !== null) await openConversation(conversationId);
+      refreshConversations();
+    } catch (caught) {
+      if (isAbortError(caught)) return;
+      setMessages(messages);
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      if (!awaitingApproval.current) setBusy(false);
+    }
+  }
+
+  async function regenerateAt(index: number) {
+    const message = messages[index];
+    if (message.id === undefined) return;
+    const signal = startStream();
+    await runVariant(messages.slice(0, index), () =>
+      regenerateMessage(message.id!, assistantHandlers(""), signal),
+    );
+  }
+
+  async function submitEdit(index: number, content: string) {
+    const message = messages[index];
+    if (message.id === undefined || !content.trim()) return;
+    setEditing(null);
+    const signal = startStream();
+    await runVariant(
+      [...messages.slice(0, index), { role: "user", content: content.trim() }],
+      () => editMessage(message.id!, content.trim(), assistantHandlers(""), signal),
     );
   }
 
@@ -1250,6 +1392,48 @@ export default function ChatView() {
                     {message.widgets && <WidgetList widgets={message.widgets} />}
                     <AnswerBody content={message.content} sources={message.sources} />
                   </>
+                ) : editing?.index === index ? (
+                  <form
+                    className="edit-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      submitEdit(index, editing.draft);
+                    }}
+                  >
+                    <textarea
+                      className="edit-input"
+                      aria-label="Edit your message"
+                      value={editing.draft}
+                      autoFocus
+                      rows={Math.min(8, editing.draft.split("\n").length + 1)}
+                      onChange={(event) =>
+                        setEditing({ index, draft: event.target.value })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setEditing(null);
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          submitEdit(index, editing.draft);
+                        }
+                      }}
+                    />
+                    <div className="edit-actions">
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => setEditing(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="primary"
+                        disabled={busy || !editing.draft.trim()}
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </form>
                 ) : (
                   message.content
                 )}
@@ -1262,6 +1446,23 @@ export default function ChatView() {
                       actions={
                         message.id !== undefined ? (
                           <span className="meta-actions">
+                            {(message.variantCount ?? 1) > 1 && (
+                              <VariantSwitcher
+                                index={message.variantIndex ?? 1}
+                                count={message.variantCount ?? 1}
+                                busy={busy}
+                                onStep={(delta) => switchVariant(index, delta)}
+                              />
+                            )}
+                            <button
+                              className="meta-button"
+                              aria-label="Regenerate this response"
+                              data-tip="Regenerate"
+                              disabled={busy}
+                              onClick={() => regenerateAt(index)}
+                            >
+                              <RegenerateIcon />
+                            </button>
                             <button
                               className={
                                 speakingId === message.id
@@ -1311,6 +1512,32 @@ export default function ChatView() {
                     />
                   )}
                 </div>
+                {message.role === "user" &&
+                  !message.pending &&
+                  editing?.index !== index &&
+                  message.id !== undefined && (
+                    <div className="user-meta">
+                      {(message.variantCount ?? 1) > 1 && (
+                        <VariantSwitcher
+                          index={message.variantIndex ?? 1}
+                          count={message.variantCount ?? 1}
+                          busy={busy}
+                          onStep={(delta) => switchVariant(index, delta)}
+                        />
+                      )}
+                      <button
+                        className="meta-button"
+                        aria-label="Edit this message"
+                        data-tip="Edit message"
+                        disabled={busy}
+                        onClick={() =>
+                          setEditing({ index, draft: message.content })
+                        }
+                      >
+                        <EditIcon />
+                      </button>
+                    </div>
+                  )}
               </div>
               {branch && index === branch.count - 1 && (
                 <div className="branch-divider">

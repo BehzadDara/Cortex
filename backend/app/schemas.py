@@ -74,6 +74,19 @@ class StopRequest(BaseModel):
     conversation_id: int
 
 
+class RegenerateRequest(BaseModel):
+    timezone: str | None = None
+
+
+class EditRequest(BaseModel):
+    content: str = Field(min_length=1)
+    timezone: str | None = None
+
+
+class PathResponse(BaseModel):
+    messages: list["MessageResponse"]
+
+
 class ImageAskResponse(BaseModel):
     conversation_id: int
     answer: str
@@ -133,6 +146,10 @@ class MessageResponse(BaseModel):
     id: int
     role: str
     content: str
+    parent_id: int | None = None
+    variant_index: int = 1
+    variant_count: int = 1
+    variant_ids: list[int] = []
     steps: list[ToolStep] | None = None
     sources: list[SourceRef] | None = None
     widgets: list[WidgetPayload] | None = None
@@ -164,7 +181,6 @@ class ConversationRename(BaseModel):
 
 class ConversationResponse(BaseModel):
     id: int
-    summary: str | None
     active_thread: str | None
     branched_from_id: int | None
     branched_from_title: str | None
