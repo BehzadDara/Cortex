@@ -55,6 +55,7 @@ def copy_message(message: Message, conversation_id: int) -> Message:
         conversation_id=conversation_id,
         role=message.role,
         content=message.content,
+        attachments=message.attachments,
         summary=message.summary,
         summarized_depth=message.summarized_depth,
         steps=message.steps,

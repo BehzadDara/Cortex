@@ -56,6 +56,7 @@ export interface ConversationDetail {
     id: number;
     role: string;
     content: string;
+    attachments: { name: string; filename: string | null }[] | null;
     parent_id: number | null;
     variant_index: number;
     variant_count: number;

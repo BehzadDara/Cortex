@@ -19,7 +19,9 @@ class ExtractedImage:
     source_url: str | None = None
 
 
-def usable_image(data: bytes, source_url: str | None = None) -> ExtractedImage | None:
+def usable_image(
+    data: bytes, source_url: str | None = None, min_dimension: int | None = None
+) -> ExtractedImage | None:
     if len(data) > settings.max_image_bytes:
         return None
     try:
@@ -31,7 +33,10 @@ def usable_image(data: bytes, source_url: str | None = None) -> ExtractedImage |
         return None
     if format_name not in USABLE_FORMATS:
         return None
-    if min(width, height) < settings.min_image_dimension:
+    smallest_allowed = (
+        settings.min_image_dimension if min_dimension is None else min_dimension
+    )
+    if min(width, height) < smallest_allowed:
         return None
     return ExtractedImage(data=data, extension=format_name, source_url=source_url)
 

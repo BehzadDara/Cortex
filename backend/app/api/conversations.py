@@ -28,6 +28,7 @@ def to_message_response(session: Session, message: Message) -> MessageResponse:
         id=message.id,
         role=message.role,
         content=message.content,
+        attachments=message.attachments,
         parent_id=message.parent_id,
         variant_index=siblings.index(message) + 1,
         variant_count=len(siblings),

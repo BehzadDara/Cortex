@@ -153,6 +153,7 @@ def save_exchange(
     parent_id: int | None,
     question: str,
     answer: str,
+    attachments: list[dict] | None = None,
     steps: list[dict] | None = None,
     sources: list[dict] | None = None,
     widgets: list[dict] | None = None,
@@ -162,7 +163,10 @@ def save_exchange(
 ) -> int:
     with SessionLocal() as session:
         user_message = Message(
-            conversation_id=conversation_id, role="user", content=question
+            conversation_id=conversation_id,
+            role="user",
+            content=question,
+            attachments=attachments or None,
         )
         attach(session, user_message, parent_id)
         assistant_message = Message(

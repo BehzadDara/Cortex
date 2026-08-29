@@ -160,6 +160,9 @@ export const generatedImageUrl = (filename: string) =>
 export const knowledgeImageUrl = (filename: string) =>
   `${BASE}/knowledge-images/${filename}`;
 
+export const chatImageUrl = (filename: string) =>
+  `${BASE}/chat-images/${filename}`;
+
 export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);

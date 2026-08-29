@@ -67,6 +67,11 @@ def get_knowledge_image_store() -> FileStore:
 
 
 @lru_cache
+def get_chat_image_store() -> FileStore:
+    return DiskFileStore(settings.chat_image_dir)
+
+
+@lru_cache
 def get_reranker() -> Reranker:
     return CrossEncoderReranker()
 

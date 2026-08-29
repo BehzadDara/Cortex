@@ -14,6 +14,7 @@ dist/
 # Generated images
 backend/generated_images/
 backend/knowledge_images/
+backend/chat_images/
 
 # Voice model weights
 backend/voice_models/

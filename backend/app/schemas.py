@@ -142,10 +142,16 @@ class WidgetPayload(BaseModel):
     data: dict
 
 
+class Attachment(BaseModel):
+    name: str
+    filename: str | None = None
+
+
 class MessageResponse(BaseModel):
     id: int
     role: str
     content: str
+    attachments: list[Attachment] | None = None
     parent_id: int | None = None
     variant_index: int = 1
     variant_count: int = 1

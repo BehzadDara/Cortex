@@ -3,18 +3,32 @@ from sqlalchemy.orm import Session
 
 from app.api.common import find_or_create_conversation, start_title_generation
 from app.dependencies import (
+    get_chat_image_store,
     get_fast_llm_provider,
     get_llm_provider,
     get_session,
     get_vision_provider,
 )
 from app.rag.conversation import leaf_of, save_exchange, summarize_if_due
+from app.rag.file_store import FileStore
+from app.rag.images import usable_image
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_image_question_prompt
 from app.rag.vision import VisionProvider
 from app.schemas import ImageAskResponse
 
 router = APIRouter(tags=["vision"])
+
+
+def stored_attachment(
+    data: bytes, filename: str | None, image_store: FileStore
+) -> dict:
+    name = filename or "image"
+    picture = usable_image(data, min_dimension=0)
+    if picture is None:
+        return {"name": name, "filename": None}
+    return {"name": name, "filename": image_store.save(picture.data, picture.extension)}
+
 
 
 @router.post("/ask-image", response_model=ImageAskResponse)
@@ -24,6 +38,7 @@ def ask_image(
     conversation_id: int | None = Form(None),
     session: Session = Depends(get_session),
     vision: VisionProvider = Depends(get_vision_provider),
+    image_store: FileStore = Depends(get_chat_image_store),
     llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
 ) -> ImageAskResponse:
@@ -33,13 +48,15 @@ def ask_image(
     if is_new:
         start_title_generation(fast_llm, conversation.id, question, {})
 
-    answer = vision.describe(file.file.read(), build_image_question_prompt(question))
+    data = file.file.read()
+    answer = vision.describe(data, build_image_question_prompt(question))
     leaf = leaf_of(session, conversation)
     save_exchange(
         conversation.id,
         leaf.id if leaf else None,
-        f"{question} (image: {file.filename})",
+        question,
         answer,
+        attachments=[stored_attachment(data, file.filename, image_store)],
     )
     summarize_if_due(conversation.id, llm)
     return ImageAskResponse(conversation_id=conversation.id, answer=answer)

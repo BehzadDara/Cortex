@@ -12,6 +12,7 @@ import remarkGfm from "remark-gfm";
 import {
   askImage,
   branchConversation,
+  chatImageUrl,
   continueAssistant,
   deleteConversation,
   editMessage,
@@ -81,15 +82,6 @@ function formatDuration(ms: number): string {
 
 function isAbortError(caught: unknown): boolean {
   return caught instanceof DOMException && caught.name === "AbortError";
-}
-
-function parseStoredContent(content: string): {
-  content: string;
-  attachment?: Attachment;
-} {
-  const match = content.match(/^([\s\S]*?)\s*\(image: (.+)\)$/);
-  if (!match) return { content };
-  return { content: match[1], attachment: { name: match[2] } };
 }
 
 const EMPTY_HINT =
@@ -499,15 +491,19 @@ function AnswerBody({
 type StoredMessage = ConversationDetail["messages"][number];
 
 function toChatMessage(message: StoredMessage): ChatMessage {
-  const parsed =
-    message.role === "user"
-      ? parseStoredContent(message.content)
-      : { content: message.content, attachment: undefined };
+  const [attachment] = message.attachments ?? [];
   return {
     id: message.id,
     role: message.role === "user" ? "user" : "assistant",
-    content: parsed.content,
-    attachment: parsed.attachment,
+    content: message.content,
+    attachment: attachment
+      ? {
+          name: attachment.name,
+          url: attachment.filename
+            ? chatImageUrl(attachment.filename)
+            : undefined,
+        }
+      : undefined,
     steps: message.steps ?? undefined,
     sources: message.sources ?? undefined,
     widgets: message.widgets ?? undefined,

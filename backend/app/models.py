@@ -124,6 +124,7 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
     summarized_depth: Mapped[int | None]
+    attachments: Mapped[list | None] = mapped_column(JSONB)
     steps: Mapped[list | None] = mapped_column(JSONB)
     sources: Mapped[list | None] = mapped_column(JSONB)
     widgets: Mapped[list | None] = mapped_column(JSONB)

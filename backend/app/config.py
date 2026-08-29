@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     image_size: int = 768
     image_dir: str = str(BACKEND_ROOT / "generated_images")
     knowledge_image_dir: str = str(BACKEND_ROOT / "knowledge_images")
+    chat_image_dir: str = str(BACKEND_ROOT / "chat_images")
     max_images_per_document: int = 8
     max_image_bytes: int = 8_000_000
     min_image_dimension: int = 128
