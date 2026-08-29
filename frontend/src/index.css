@@ -956,6 +956,11 @@ button.ghost.icon.recording:hover {
   padding: 0;
 }
 
+.markdown .inert-image {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
 .markdown pre:has(.mermaid-diagram) {
   background: transparent;
   padding: 0;

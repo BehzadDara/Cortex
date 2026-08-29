@@ -55,8 +55,20 @@ TRANSCRIBE_PROMPT = """Transcribe all text visible in this image exactly. If the
 
 CAPTION_PROMPT = """Describe this image in one or two sentences so it can be found by search: what it shows, any prominent text, and what it is about. Output only the description."""
 
+IMAGE_QUESTION_PROMPT = """You are Cortex, looking at an image the user uploaded. You can see and describe the image; you cannot create, edit, or return images, and you have no way to show the user a picture.
+
+If the question asks you to change, edit, recolour, or produce an image, say plainly that you can only describe what you see, then describe the relevant part of the image. Never claim to have edited or generated anything, and never write an image link or markdown image.
+
+Question: {question}
+
+Answer:"""
+
 def build_title_prompt(question: str) -> str:
     return TITLE_PROMPT.format(question=question)
+
+
+def build_image_question_prompt(question: str) -> str:
+    return IMAGE_QUESTION_PROMPT.format(question=question)
 
 
 FOLLOW_UP_CONTEXT_CHARS = 200

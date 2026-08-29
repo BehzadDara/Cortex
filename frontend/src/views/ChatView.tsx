@@ -401,6 +401,10 @@ function CodeBlock({
   return <code className={className}>{children}</code>;
 }
 
+function InertImage({ alt }: { alt?: string }) {
+  return <span className="inert-image">{alt || "image"}</span>;
+}
+
 function Markdown({ children }: { children: string }) {
   return (
     <div className="markdown">
@@ -410,6 +414,7 @@ function Markdown({ children }: { children: string }) {
           a: (props) => (
             <a {...props} target="_blank" rel="noopener noreferrer" />
           ),
+          img: InertImage,
         }}
       >
         {children}
@@ -439,6 +444,7 @@ function AnswerBody({
           remarkPlugins={[remarkGfm]}
           components={{
             code: CodeBlock,
+            img: InertImage,
             a: ({ href, children, ...props }) => {
               if (href?.startsWith("#source-")) {
                 const id = Number(href.slice("#source-".length));

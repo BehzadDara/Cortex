@@ -10,6 +10,7 @@ from app.dependencies import (
 )
 from app.rag.conversation import save_exchange, summarize_if_due
 from app.rag.llm import LLMProvider
+from app.rag.prompts import build_image_question_prompt
 from app.rag.vision import VisionProvider
 from app.schemas import ImageAskResponse
 
@@ -32,7 +33,7 @@ def ask_image(
     if is_new:
         start_title_generation(fast_llm, conversation.id, question, {})
 
-    answer = vision.describe(file.file.read(), question)
+    answer = vision.describe(file.file.read(), build_image_question_prompt(question))
     save_exchange(conversation.id, f"{question} (image: {file.filename})", answer)
     summarize_if_due(conversation.id, llm)
     return ImageAskResponse(conversation_id=conversation.id, answer=answer)
