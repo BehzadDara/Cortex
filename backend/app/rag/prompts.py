@@ -51,6 +51,68 @@ SUMMARY_PROMPT = """Summarize the conversation below concisely. Keep facts, name
 Summary:"""
 
 
+MEMORY_PROMPT = """Extract durable facts about the user from their message. A durable fact is one that is still true next month: their name, where they live or work, their job, the tools and languages they use, their preferences, their health and accessibility needs, and their long-term goals or constraints.
+
+Every fact must name something specific: a name, a place, a job, a tool, a language, a preference, or a condition. Skip anything vague enough to be true of anyone.
+
+Write one fact per line, each a short sentence starting with "The user". Write nothing else. If the message states no durable fact about the user, write exactly: none
+
+Ignore questions, requests, and greetings — including questions the user asks about themselves — and anything that describes the world rather than the user. A question is never a fact, however much it mentions the user.
+
+Message: Hi, my name is Behzad and I'm a backend developer.
+Facts:
+The user is named Behzad.
+The user is a backend developer.
+
+Message: What is reciprocal rank fusion?
+Facts:
+none
+
+Message: I always deploy with Docker Compose, never Kubernetes.
+Facts:
+The user deploys with Docker Compose rather than Kubernetes.
+
+Message: hey there
+Facts:
+none
+
+Message: Can you draw me a cat?
+Facts:
+none
+
+Message: Remind me what my notes say about tea.
+Facts:
+none
+
+Message: do you know my name? and where do I live?
+Facts:
+none
+
+Message: What do you remember about me?
+Facts:
+none
+
+Message: I deploy things and I work somewhere in tech.
+Facts:
+none
+
+Message: I'm learning Rust this year because I want to write my own database.
+Facts:
+The user is learning Rust.
+The user wants to write their own database.
+
+Message: The capital of France is Paris.
+Facts:
+none
+
+Message: I'm colour-blind, so red and green charts are hard for me to read.
+Facts:
+The user is colour-blind and cannot easily read red and green charts.
+
+Message: {message}
+Facts:
+"""
+
 TRANSCRIBE_PROMPT = """Transcribe all text visible in this image exactly. If the image contains diagrams, charts, or figures, describe each one briefly after the transcription. Output only the transcription and descriptions."""
 
 CAPTION_PROMPT = """Describe this image in one or two sentences so it can be found by search: what it shows, any prominent text, and what it is about. Output only the description."""
@@ -96,3 +158,7 @@ def build_summary_prompt(previous: str | None, transcript: str) -> str:
     return SUMMARY_PROMPT.format(
         previous_section=previous_section, transcript=transcript
     )
+
+
+def build_memory_prompt(message: str) -> str:
+    return MEMORY_PROMPT.format(message=message)

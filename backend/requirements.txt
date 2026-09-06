@@ -21,3 +21,5 @@ psycopg-pool
 mlx-whisper
 kokoro-onnx
 soundfile
+mem0ai
+ollama

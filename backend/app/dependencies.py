@@ -10,6 +10,7 @@ from app.rag.file_store import DiskFileStore, FileStore
 from app.rag.image_generation import ImageGenerator, PollinationsImageGenerator
 from app.rag.llm import LLMProvider, OllamaLLMProvider
 from app.rag.market_data import CoinGeckoMarketData, MarketDataProvider
+from app.rag.memory import DisabledMemoryStore, Mem0MemoryStore, MemoryStore
 from app.rag.reranking import CrossEncoderReranker, Reranker
 from app.rag.speech import KokoroTextToSpeech, TextToSpeech
 from app.rag.transcription import SpeechToText, WhisperSpeechToText
@@ -119,3 +120,10 @@ def get_weather_provider() -> WeatherProvider:
 @lru_cache
 def get_market_data_provider() -> MarketDataProvider:
     return CoinGeckoMarketData()
+
+
+@lru_cache
+def get_memory_store() -> MemoryStore:
+    if not settings.user_memory_enabled:
+        return DisabledMemoryStore()
+    return Mem0MemoryStore(get_fast_llm_provider())

@@ -6,6 +6,7 @@ import type {
   Feedback,
   ImageAnswer,
   Job,
+  Memory,
   PromptLog,
   Source,
   Stats,
@@ -42,6 +43,13 @@ export const createCollection = (name: string) =>
 
 export async function deleteCollection(id: number): Promise<void> {
   const response = await fetch(`${BASE}/collections/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await toError(response);
+}
+
+export const getMemories = () => request<Memory[]>("/memories");
+
+export async function deleteMemory(id: string): Promise<void> {
+  const response = await fetch(`${BASE}/memories/${id}`, { method: "DELETE" });
   if (!response.ok) throw await toError(response);
 }
 

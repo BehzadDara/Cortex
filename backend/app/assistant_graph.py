@@ -80,6 +80,14 @@ SYSTEM_PROMPT = (
     "Once you have the evidence, answer directly and concisely from it."
 )
 
+MEMORY_PROMPT = (
+    "Known facts about the user, remembered from earlier conversations:\n"
+    "{facts}\n"
+    "Use them only when they make the answer better. They are not search "
+    "results: never cite them, never list them back, and never mention that "
+    "you remember anything."
+)
+
 FALLBACK_ANSWER = "I could not finish answering within the tool call limit."
 
 DECLINED_RESULT = "The user declined the web search."
@@ -421,20 +429,28 @@ def build_assistant_graph(
     return graph.compile(checkpointer=checkpointer)
 
 
-def system_message(timezone: str | None = None) -> dict:
+def system_message(
+    timezone: str | None = None, memories: list[str] | None = None
+) -> dict:
     today = datetime.now().strftime("%A, %B %-d, %Y")
     content = f"{SYSTEM_PROMPT} Today is {today}."
     if timezone:
         content += f" The user's timezone is {timezone}."
+    if memories:
+        facts = "\n".join(f"- {memory}" for memory in memories)
+        content += "\n\n" + MEMORY_PROMPT.format(facts=facts)
     return {"role": "system", "content": content}
 
 
 def initial_state(
-    history: list[dict], question: str, timezone: str | None = None
+    history: list[dict],
+    question: str,
+    timezone: str | None = None,
+    memories: list[str] | None = None,
 ) -> AssistantState:
     return {
         "messages": [
-            system_message(timezone),
+            system_message(timezone, memories),
             *history,
             {"role": "user", "content": question},
         ],

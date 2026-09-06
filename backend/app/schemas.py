@@ -192,3 +192,9 @@ class ConversationResponse(BaseModel):
     branched_from_title: str | None
     branched_count: int | None
     messages: list[MessageResponse]
+
+
+class MemoryResponse(BaseModel):
+    id: str
+    text: str
+    created_at: str | None

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 768
     qdrant_collection: str = "chunks"
     qdrant_image_collection: str = "images"
+    qdrant_memory_collection: str = "memories"
 
     chunk_size: int = 1000
     chunk_overlap: int = 200
@@ -49,6 +50,12 @@ class Settings(BaseSettings):
     tts_speed: float = 1.0
     memory_recent_messages: int = 6
     memory_summary_threshold: int = 4
+    user_memory_enabled: bool = True
+    user_memory_id: str = "local"
+    user_memory_top_k: int = 5
+    user_memory_list_limit: int = 200
+    user_memory_duplicate_score: float = 0.95
+    user_memory_history_path: str = str(BACKEND_ROOT / "user_memory" / "history.db")
     chat_max_rounds: int = 5
     llm_num_ctx: int = 16384
     agent_min_relevance: float = 0.0

@@ -309,6 +309,22 @@ button.danger:hover {
   margin-top: 10px;
 }
 
+.panel-note {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-width: 62ch;
+  margin: -8px 0 18px;
+}
+
+.empty {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 52ch;
+  padding: 14px 0 6px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

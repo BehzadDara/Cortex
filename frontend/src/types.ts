@@ -13,6 +13,12 @@ export interface Doc {
   created_at: string;
 }
 
+export interface Memory {
+  id: string;
+  text: string;
+  created_at: string | null;
+}
+
 export interface ConversationSummary {
   id: number;
   title: string;

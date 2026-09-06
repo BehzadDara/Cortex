@@ -19,6 +19,9 @@ backend/chat_images/
 # Voice model weights
 backend/voice_models/
 
+# User memory history
+backend/user_memory/
+
 # Environment
 .env
 .env.*

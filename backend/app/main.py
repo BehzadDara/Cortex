@@ -12,6 +12,7 @@ from app.api import (
     conversations,
     documents,
     jobs,
+    memories,
     messages,
     stats,
     vision,
@@ -47,6 +48,7 @@ app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)
 app.include_router(messages.router)
+app.include_router(memories.router)
 app.include_router(assistant.router)
 app.include_router(vision.router)
 app.include_router(voice.router)

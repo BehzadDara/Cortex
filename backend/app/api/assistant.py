@@ -34,6 +34,7 @@ from app.dependencies import (
     get_knowledge_image_store,
     get_llm_provider,
     get_market_data_provider,
+    get_memory_store,
     get_reranker,
     get_session,
     get_vector_store,
@@ -52,6 +53,7 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.image_generation import ImageGenerator
 from app.rag.llm import LLMProvider
 from app.rag.market_data import MarketDataProvider
+from app.rag.memory import recall_quietly, remember_quietly
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
@@ -243,6 +245,11 @@ def stream_events(
             usage.response_tokens,
         )
         summarize_if_due(conversation_id, llm)
+        remember_quietly(
+            get_memory_store(),
+            question,
+            {"conversation_id": conversation_id, "message_id": message_id},
+        )
 
 
 @router.post("/assistant")
@@ -286,7 +293,12 @@ def assistant(
     return StreamingResponse(
         stream_events(
             graph,
-            initial_state(history, request.question, request.timezone),
+            initial_state(
+                history,
+                request.question,
+                request.timezone,
+                recall_quietly(get_memory_store(), request.question),
+            ),
             thread_id,
             conversation.id,
             parent_id,
