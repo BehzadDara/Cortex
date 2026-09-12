@@ -2,6 +2,23 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-09-12 — The system-message split earns nothing on Ollama, measured twice
+
+`system_message()` builds one string: static persona and tool rules, then today's date, the timezone, and the facts recalled for *this* question. Recall changes per question, so the system message differs on nearly every turn, and the textbook advice is to split it — static prefix first, variable suffix last — so a prefix cache can reuse the stable part. That split was implemented, shipped, and reverted earlier with no recorded reason. Before re-landing it, both of its justifications were measured.
+
+**The caching argument.** Six sequential turns of a growing conversation, per-turn differing memory facts, prompts from 805 to 2904 tokens, comparing `prompt_eval_duration` for the interleaved shape against the split shape, run in both orders to rule out a warm-cache advantage for whichever went second:
+
+| | total prefill, 6 turns |
+| --- | --- |
+| interleaved (today) | 2.10 s / 2.11 s |
+| split | 2.08 s / 2.08 s |
+
+A 1% difference, and the per-turn pattern is identical in all four runs. Ollama does reward a byte-identical repeat — the same prompt twice in a row went 0.11 s then 0.04 s — but a real conversation never repeats a prompt exactly, and restructuring where the variable text sits does not move the number. `prompt_eval_count` is no help as an instrument either: it reports the full prompt length on cache hits and misses alike.
+
+**The attention argument.** If caching gains nothing, the remaining case for the split is position: facts sitting at token ~750 are buried, while facts placed right before the question land in the high-attention tail. Five distinctive facts, five questions each answerable only from one of them, asked under both shapes with filler history in between — 5/5 facts used in both shapes at ~3.6k tokens of history, and 5/5 in both shapes again at ~11k tokens, deep into lost-in-the-middle territory.
+
+So the split is not re-landed, and `Prefix Caching`, `KV Cache`, and `Cache-Friendly Prompt Structure` close as measured non-issues on this stack rather than as open gaps. The lesson is the same one the injected-instruction work produced: advice written for hosted APIs with an explicit cache-control knob does not automatically transfer to a local inference server that manages its own KV cache, and the cost of finding out is one afternoon of measurement against months of carrying a structural change that buys nothing.
+
 ## 2026-09-12 — The relevance gate was mis-calibrated, and the eval could not see it
 
 Web fallback needed "no relevant results", which vector search has no concept of, so the agent filters evidence by cross-encoder score (`agent_min_relevance`, see the 2026-08 entry below) and falls back to the web when nothing survives. The threshold shipped at `0.0` on the reasoning that irrelevant pairs score below zero. True — but not the converse, and `0.0` is an active filter, not the no-op it was taken for.
