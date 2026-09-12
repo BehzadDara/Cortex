@@ -11,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from app.config import settings
+from app.rag.budget import estimate_tokens, within_budget
 from app.rag.llm import LLMProvider, ToolCall
 from app.rag.prompts import build_route_prompt
 from app.rag.sanitize import neutralize_instructions
@@ -252,6 +253,7 @@ def build_assistant_graph(
         *(to_definition(tool) for tool in tools),
     ]
     tool_map = {tool.name: tool for tool in tools}
+    definitions_tokens = estimate_tokens(str(definitions))
 
     def run_search(
         search,
@@ -402,7 +404,7 @@ def build_assistant_graph(
     def model(state: AssistantState) -> dict:
         writer = get_stream_writer()
         reply = llm.chat_stream(
-            state["messages"],
+            within_budget(state["messages"], definitions_tokens),
             definitions,
             lambda token: writer({"type": "token", "content": token}),
         )
