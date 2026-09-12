@@ -96,6 +96,12 @@ APPROVAL_TOOLS = {"web_search", "web_image_search", "web_video_search"}
 
 RESULT_PREVIEW_CHARS = 500
 
+MAX_SOURCE_CHARS = 2000
+
+MAX_TOOL_OUTPUT_CHARS = 4000
+
+ALREADY_SURFACED = "Already surfaced above; no new passages for this query."
+
 
 class AssistantState(TypedDict):
     messages: Annotated[list[dict], operator.add]
@@ -154,6 +160,20 @@ def preview(result: str) -> str:
     return result[:RESULT_PREVIEW_CHARS] + "…"
 
 
+def cap_tool_output(result: str) -> str:
+    if len(result) <= MAX_TOOL_OUTPUT_CHARS:
+        return result
+    return result[:MAX_TOOL_OUTPUT_CHARS] + "…"
+
+
+def source_key(filename: str, content: str) -> tuple[str, str]:
+    return (filename, content)
+
+
+def source_keys(sources: list[dict]) -> set[tuple[str, str]]:
+    return {source_key(source["filename"], source["content"]) for source in sources}
+
+
 def number_sources(found: list[SourceChunk], offset: int) -> list[dict]:
     return [
         {
@@ -170,7 +190,10 @@ def format_source(source: dict) -> str:
     header = f"[{source['id']}] {source['filename']}"
     if source["url"]:
         header += f"\n{source['url']}"
-    return f"{header}\n{source['content']}"
+    content = source["content"]
+    if len(content) > MAX_SOURCE_CHARS:
+        content = content[:MAX_SOURCE_CHARS] + "…"
+    return f"{header}\n{content}"
 
 
 def format_sources(sources: list[dict], empty_message: str) -> str:
@@ -220,10 +243,26 @@ def build_assistant_graph(
     tool_map = {tool.name: tool for tool in tools}
 
     def run_search(
-        search, name: str, empty_message: str, query: str, offset: int, writer
+        search,
+        name: str,
+        empty_message: str,
+        query: str,
+        offset: int,
+        seen_sources: set[tuple[str, str]],
+        writer,
     ) -> tuple[list[dict], str]:
-        found = number_sources(search(query), offset)
-        output = format_sources(found, empty_message)
+        results = search(query)
+        fresh = [
+            chunk
+            for chunk in results
+            if source_key(chunk.filename, chunk.content) not in seen_sources
+        ]
+        if results and not fresh:
+            found: list[dict] = []
+            output = ALREADY_SURFACED
+        else:
+            found = number_sources(fresh, offset)
+            output = format_sources(found, empty_message)
         writer({"type": "tool_result", "name": name, "content": preview(output)})
         if found:
             writer({"type": "sources", "sources": found})
@@ -247,7 +286,11 @@ def build_assistant_graph(
         return widget, f"\n\n{note} {captions}"
 
     def run_document_search(
-        query: str, offset: int, shown: set[str], writer
+        query: str,
+        offset: int,
+        shown_images: set[str],
+        seen_sources: set[tuple[str, str]],
+        writer,
     ) -> tuple[list[dict], str, list[dict]]:
         found, output = run_search(
             search_documents,
@@ -255,12 +298,13 @@ def build_assistant_graph(
             "No matching documents found.",
             query,
             offset,
+            seen_sources,
             writer,
         )
         widget, note = find_gallery(
             search_images,
             query,
-            shown,
+            shown_images,
             "Related images from the documents are shown to the user:",
             writer,
         )
@@ -269,17 +313,27 @@ def build_assistant_graph(
         return found, output + note, [widget]
 
     def run_web_search(
-        query: str, offset: int, shown: set[str], writer
+        query: str,
+        offset: int,
+        shown_images: set[str],
+        seen_sources: set[tuple[str, str]],
+        writer,
     ) -> tuple[list[dict], str, list[dict]]:
         found, output = run_search(
-            search_web, "web_search", "No web results found.", query, offset, writer
+            search_web,
+            "web_search",
+            "No web results found.",
+            query,
+            offset,
+            seen_sources,
+            writer,
         )
         if not found:
             return found, output, []
         widget, note = find_gallery(
             search_web_images,
             query,
-            shown,
+            shown_images,
             "Related photos from the web are shown to the user:",
             writer,
         )
@@ -311,6 +365,7 @@ def build_assistant_graph(
             question,
             len(state["sources"]),
             gallery_keys(state["widgets"]),
+            source_keys(state["sources"]),
             writer,
         )
         return {
@@ -374,23 +429,41 @@ def build_assistant_graph(
                 )
             elif call.name == "search_documents":
                 offset = len(state["sources"]) + len(new_sources)
-                shown = gallery_keys(state["widgets"]) | gallery_keys(new_widgets)
+                shown_images = gallery_keys(state["widgets"]) | gallery_keys(
+                    new_widgets
+                )
+                seen_sources = source_keys(state["sources"]) | source_keys(
+                    new_sources
+                )
                 found, output, widgets = run_document_search(
-                    str(call.arguments.get("query", "")), offset, shown, writer
+                    str(call.arguments.get("query", "")),
+                    offset,
+                    shown_images,
+                    seen_sources,
+                    writer,
                 )
                 new_sources.extend(found)
                 new_widgets.extend(widgets)
             elif call.name == "web_search":
                 offset = len(state["sources"]) + len(new_sources)
-                shown = gallery_keys(state["widgets"]) | gallery_keys(new_widgets)
+                shown_images = gallery_keys(state["widgets"]) | gallery_keys(
+                    new_widgets
+                )
+                seen_sources = source_keys(state["sources"]) | source_keys(
+                    new_sources
+                )
                 found, output, widgets = run_web_search(
-                    str(call.arguments.get("query", "")), offset, shown, writer
+                    str(call.arguments.get("query", "")),
+                    offset,
+                    shown_images,
+                    seen_sources,
+                    writer,
                 )
                 new_sources.extend(found)
                 new_widgets.extend(widgets)
             else:
                 tool_output = execute_tool(tool_map, call)
-                output = tool_output.text
+                output = cap_tool_output(tool_output.text)
                 writer(
                     {
                         "type": "tool_result",
