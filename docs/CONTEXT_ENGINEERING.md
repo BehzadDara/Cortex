@@ -2,13 +2,13 @@
 
 Cortex is 26 phases deep — hybrid search, reranking, LangGraph orchestration, conversation memory, mem0-backed user memory. This is a concept-by-concept read of the context/prompt-engineering field against what Cortex actually does today, with file and line, not vibes. Each concept is tagged **Implemented**, **Partial**, **Gap**, or **N/A** (not applicable to a local, single-user tool).
 
-Tally: 9 Implemented, 13 Partial, 10 Gap, 6 N/A.
+Tally: 14 Implemented, 14 Partial, 4 Gap, 6 N/A.
 
 ## Where to start, in order
 
-1. **Cap and dedup what enters the model's context, not just the UI preview.** Today only the SSE preview is truncated at `RESULT_PREVIEW_CHARS`; the full, uncapped tool output is what actually goes into the LLM's message history, with no dedup across calls in a run. See [Tool-Result Management](#tool-result-management) and [Deduplication](#deduplication).
-2. **Split the system message into a stable prefix and a variable suffix.** Persona and tool instructions never change; date, timezone, and recalled memory facts change every turn and are currently interleaved into the same string, which defeats any prefix reuse Ollama could otherwise do. See [Cache-Friendly Prompt Structure](#cache-friendly-prompt-structure).
-3. **Evaluate the prompt you actually ship, not a stand-in.** `evals/run.py` scores a separate, simpler answer prompt — not `assistant_graph.py`'s live `SYSTEM_PROMPT` and tool loop. See [Context Evaluation](#context-evaluation).
+1. ~~Cap and dedup what enters the model's context, not just the UI preview.~~ **Done.** `format_source()` now caps each passage at 2000 chars, other tool outputs at 4000, and `run_search()` skips chunks already surfaced earlier in the run. See [Tool-Result Management](#tool-result-management) and [Deduplication](#deduplication).
+2. ~~Split the system message into a stable prefix and a variable suffix.~~ **Done.** `system_message()` is now the static persona/tool text only, byte-identical every call; `context_message()` carries date, timezone, and memory facts and sits right before the live question. See [Cache-Friendly Prompt Structure](#cache-friendly-prompt-structure).
+3. **Evaluate the prompt you actually ship, not a stand-in.** `evals/run.py` scores a separate, simpler answer prompt — not `assistant_graph.py`'s live `SYSTEM_PROMPT` and tool loop. See [Context Evaluation](#context-evaluation). This is the next open item.
 
 ---
 
@@ -28,11 +28,11 @@ Tracking tokens per call is how you catch runaway context growth before it becom
 
 In Cortex: counts come only from Ollama's own `prompt_eval_count` / `eval_count` in the streamed `done` chunk (`app/rag/llm.py:75-77`), summed across tool rounds via the `operator.add` reducer on `AssistantState` (`app/assistant_graph.py:107-108`), and logged to `prompt_logs`. No local tokenizer (`tiktoken` or equivalent) exists anywhere in the codebase. Fine as a post-hoc metric; not usable as a pre-flight guard, since you only learn the count after Ollama has already run (and possibly already truncated). A cheap local estimate (even a chars/4 heuristic) before the call would let you warn or trim proactively.
 
-### Context Budgets — Gap
+### Context Budgets — Partial
 
 A context budget is an explicit allocation — "system gets ~500 tokens, history gets ~2K, retrieved evidence gets ~4K" — enforced before the call, not discovered after it. Without one, whichever piece happens to be biggest that turn (a long web page, a chatty history) eats the room the others needed.
 
-In Cortex: no budget allocator exists. System prompt, history, retrieved sources, and tool results are all concatenated into `messages` and sent as-is (`app/assistant_graph.py:445-464`); the only size limit anywhere is `RESULT_PREVIEW_CHARS = 500`, and that only trims the SSE preview shown to the UI — not what's sent to the model. **This is the single highest-leverage gap in this document.** A large `search_documents`/`web_search` result plus a long conversation history can exceed 16K tokens with zero code-level signal — Ollama just truncates silently. Add a per-segment cap (a hard character cap per tool result before it's appended to `messages`) as a first, cheap version of a budget.
+In Cortex: still no formal allocator across segments — system prompt, history, retrieved sources, and tool results are all concatenated into `messages` (`app/assistant_graph.py:445-464`+) with no per-segment token accounting. But the worst case is now bounded: `format_source()` caps each passage at `MAX_SOURCE_CHARS = 2000`, other tool outputs cap at `MAX_TOOL_OUTPUT_CHARS = 4000`, and cross-call dedup (see Deduplication) stops the same evidence from being counted twice. A single run can no longer blow the budget from one oversized result — it can still grow from a long conversation history, which has no token-based cap (see Conversation Summarization).
 
 ### Lost-in-the-Middle — Partial
 
@@ -52,11 +52,11 @@ Selection is deciding what actually deserves a seat in the context — not every
 
 In Cortex: the `route` node asks the fast model whether a question needs the user's documents at all before doing any retrieval, judged with the previous question attached for follow-ups (`app/assistant_graph.py:295-298`; measured 100% on a 46-question set, `evals/routing.py`). Document questions get the retrieval funnel; live-data, arithmetic, and small-talk questions skip it entirely.
 
-### Context Ordering — Partial
+### Context Ordering — Implemented
 
 Ordering is the sequence pieces appear in: system → grounding evidence → conversation history → the live question is a standard, sensible shape. It also matters for caching — stable content first, volatile content last.
 
-In Cortex: `initial_state()` builds `[system_message(...), *history, {"role": "user", "content": question}]` (`app/assistant_graph.py:445-464`) — standard chat ordering. But `system_message()` itself (`app/assistant_graph.py:432-442`) interleaves static persona/tool text with per-turn variable content (today's date, timezone, memory facts) in one string, so the "stable-first" property doesn't hold *within* the system message.
+In Cortex: `initial_state()` builds `[system_message(), *history, context_message(...), {"role": "user", "content": question}]` — static persona/tools first (byte-identical every call), history in the middle, then the per-turn variable content (date, timezone, memory facts) right before the live question, where recency helps the model actually use it. This also fixed the "stable-first" violation noted here previously — see Cache-Friendly Prompt Structure.
 
 ### Dynamic Context — Partial
 
@@ -82,11 +82,11 @@ In Cortex: separation relies entirely on chat-role structure (`role: tool` vs `r
 
 Every extra or repeated token in context is a token the model has to read past, and a token you're paying prefill latency for.
 
-### Context Pollution — Gap
+### Context Pollution — Implemented
 
 Pollution is irrelevant, redundant, or stale content sitting in context alongside what actually matters — diluting attention and, in agent loops, sometimes convincing the model to repeat work it already did.
 
-In Cortex: two searches within one run (e.g. the seeded `retrieve` plus a follow-up `search_documents` tool call) have no shared "already surfaced" chunk-id set — `run_tools()` (`app/assistant_graph.py:354-411`) tracks only a numbering `offset`, not exclusion. The same chunk can appear twice, under two different citation numbers, in one turn's context. Fix is the same code path as Deduplication below.
+In Cortex: `run_search()` now filters out any document/web chunk whose `(filename, content)` pair was already surfaced earlier in the same run, before it's numbered or formatted — the same chunk can no longer appear twice under two citation numbers in one turn. If a search returns only already-shown chunks, the model gets `"Already surfaced above; no new passages for this query."` instead of a duplicate block.
 
 ### Context Pruning — Partial
 
@@ -94,17 +94,17 @@ Pruning actively removes content that's already in context once it stops earning
 
 In Cortex: no pruning of the LLM-facing message list was found. `RESULT_PREVIEW_CHARS = 500` (`app/assistant_graph.py:97, 151-154`) prunes only the *UI* preview stream — the full untrimmed tool output stays in `state["messages"]` for the rest of the run. Worth an explicit comment or rename on that constant so it doesn't get mistaken for a token-budget control.
 
-### Deduplication — Partial
+### Deduplication — Implemented
 
 Two flavors matter here: ingestion-time dedup (don't index the same content twice) and run-time dedup (don't show the model the same evidence twice in one answer).
 
-In Cortex: image dedup is real and thoughtful — `gallery_key()` and `gallery_keys()` (`app/assistant_graph.py:182-192`) track every image already shown via widgets in the run, and `find_gallery()` filters `shown` keys before adding new ones (`app/assistant_graph.py:232-247`). Content-hash dedup exists at crawl time (unchanged pages skipped) and for knowledge images. Text-chunk dedup across tool calls in one run — the same mechanism, for the same reason — does not exist. An earlier LangGraph fan-out design apparently deduped after fan-in (`docs/DECISIONS.md`); that logic didn't carry over when the graph was simplified to a single agent loop. Port the same pattern used for images: a `seen_chunk_ids` set threaded through `run_tools()` the way `shown` already is for galleries.
+In Cortex: image dedup — `gallery_key()` and `gallery_keys()` (`app/assistant_graph.py`) track every image already shown via widgets in the run, and `find_gallery()` filters `shown` keys before adding new ones. Content-hash dedup exists at crawl time (unchanged pages skipped) and for knowledge images. Text-chunk dedup now exists too, mirroring the image pattern: `source_key()`/`source_keys()` build a `(filename, content)` identity, and `run_search()` filters chunks already present in `state["sources"]` (or accumulated earlier in the same tool round) before numbering them. An earlier LangGraph fan-out design apparently deduped after fan-in (`docs/DECISIONS.md`); that logic didn't carry over when the graph was simplified to a single agent loop — this restores it in the new shape.
 
-### Tool-Result Management — Gap
+### Tool-Result Management — Implemented
 
 Tool outputs are one of the fastest ways to blow a context budget — a search API or a scraped page can return far more text than the model needs, and it all counts against the same window as everything else.
 
-In Cortex: `format_source()`/`format_sources()` (`app/assistant_graph.py:169-179`) render the *full, untruncated* content of every result into the tool-role message appended to history. Result *count* is capped (`top_k = 5`, `web_search_results = 5`, `app/config.py:41, 62`) but individual result *length* is not. Tool round-trips are capped at `chat_max_rounds = 5` (`app/config.py:59`, enforced in `app/assistant_graph.py:413-417`), with a clean fallback message if the limit is hit mid-loop. Add a character cap per individual tool result (separate from the UI's `RESULT_PREVIEW_CHARS`) before it's appended to `messages` — a long scraped web page or a big document chunk currently has no ceiling.
+In Cortex: `format_source()` caps each passage at `MAX_SOURCE_CHARS = 2000` chars before it's rendered into the tool-role message — the stored source dict (used for citation chips in the UI) keeps the full content, only what reaches the LLM is capped. Other tool outputs (weather, calculator, kb_stats, etc.) are capped at `MAX_TOOL_OUTPUT_CHARS = 4000` via `cap_tool_output()`. Result *count* was already capped (`top_k = 5`, `web_search_results = 5`) and tool round-trips at `chat_max_rounds = 5`, with a clean fallback message if the limit is hit mid-loop.
 
 ---
 
@@ -208,11 +208,11 @@ Hosted APIs (Anthropic, OpenAI) let you mark a prefix of your prompt as cacheabl
 
 In Cortex: no such mechanism exists — grep for `cache_control`/`prompt_cache` returns nothing, and Ollama's local API has no equivalent knob to opt into. Expected: prompt caching as a product feature is specific to hosted multi-tenant APIs. Not a real gap for a local Ollama setup — see KV Cache below for the local equivalent that does apply here.
 
-### Prefix Caching — Gap
+### Prefix Caching — Partial
 
 The general technique prompt caching is built on — recognizing that two prompts share a common prefix and reusing the computed state for that shared part. It applies underneath hosted APIs and underneath local inference servers alike; the difference is who exposes control over it.
 
-In Cortex: Ollama does prefix-caching internally at the KV-cache level, but Cortex's own prompt construction actively works against it — `system_message()` (`app/assistant_graph.py:432-442`) rebuilds one string per call with per-turn variable content (recalled memory facts, which differ by question) interleaved into the otherwise-static persona/tool text. Fix is structural, not a new subsystem — see Cache-Friendly Prompt Structure below.
+In Cortex: the structural blocker is fixed — `system_message()` is now a fixed, argument-free function returning only `SYSTEM_PROMPT`, identical on every single call across every conversation, with date/timezone/memory moved into a separate `context_message()`. Ollama's local KV cache (see below) can now actually reuse that stable prefix. Still "Partial" rather than "Implemented" because there's no way to confirm or measure the reuse from Cortex's side — see Cache Hits/Misses.
 
 ### Cache Hits / Misses — N/A
 
@@ -226,23 +226,23 @@ Caches are finite — entries expire after a time-to-live or get evicted (usuall
 
 In Cortex: nothing to configure yet — no cache of any kind exists. Relevant if the "semantic caching" item from `docs/PLAN.md`'s future-ideas list is ever built: a semantic cache absolutely needs a TTL/eviction policy, since stale cached answers to re-ingested or edited documents are worse than a cache miss.
 
-### Cache-Friendly Prompt Structure — Gap
+### Cache-Friendly Prompt Structure — Implemented
 
 The practical rule underlying all of the above: put everything static first (persona, tool definitions, instructions) and everything that changes per-call last (the live question, per-turn facts). That ordering is what lets a cache — hosted or local — reuse the most possible.
 
-In Cortex: currently violated in one specific, fixable spot — `system_message()` puts static `SYSTEM_PROMPT` text, the daily-changing date, the per-conversation timezone, and the per-question memory recall all into *one* string (`app/assistant_graph.py:432-442`). Recall in particular changes with the live question (`app/api/assistant.py:300`), so the system message is effectively different on every single turn. Split into two messages — a fully static `system` message (persona + tools + citation rules, byte-identical every call) and a second, short message right before the user's question carrying date/timezone/memory facts. Same information reaches the model; the static portion becomes reusable.
+In Cortex: `system_message()` now returns only `{"role": "system", "content": SYSTEM_PROMPT}` — no arguments, no date, no timezone, no memory, byte-identical on every call. `context_message(timezone, memories)` builds the variable per-turn content (today's date, timezone, recalled facts) as its own message, inserted after the conversation history and right before the live question — `initial_state()` now assembles `[system_message(), *history, context_message(...), {"role": "user", ...}]`. Same information reaches the model; the static persona/tool block is now a stable, reusable prefix.
 
-### KV Cache — Gap
+### KV Cache — Partial
 
 During generation, a transformer caches the key/value attention tensors for every token it has already processed, so it never has to recompute attention over old tokens as it generates new ones. This cache is what prompt/prefix caching actually reuses under the hood — and it's exactly what Ollama itself maintains locally, per loaded model, without any API-level opt-in.
 
-In Cortex: Ollama's local server does maintain a KV cache and can reuse it across calls with an identical prefix, transparently — but Cortex doesn't currently structure its calls to take advantage of that. There's also no code here that manages or inspects it directly; it's entirely inside Ollama's process. The cache-friendly restructuring above is the whole lever available here — Ollama does the reuse for free once the prefix is actually stable.
+In Cortex: Ollama's local server does maintain a KV cache and can reuse it across calls with an identical prefix, transparently. The one lever Cortex controls — keeping that prefix stable — is now pulled (see Cache-Friendly Prompt Structure). Still "Partial" rather than "Implemented": there's no code here that manages, inspects, or confirms the reuse, and Ollama doesn't surface whether it actually happened (see Cache Hits/Misses) — this is "the fix that lets the win happen," not a measured win.
 
 ### Prefill vs. Decode — N/A (concept)
 
 Two distinct phases of one LLM call. *Prefill* processes the entire input prompt in parallel (fast per-token, but scales with prompt length) to build the initial KV cache; *decode* then generates output tokens one at a time, autoregressively (slower per-token, scales with output length). A long system prompt and long history mostly cost you at prefill; a long answer costs you at decode.
 
-In Cortex: every turn re-runs prefill over the full assembled prompt — system message, history, retrieved sources, tool results — because nothing is cached across turns. This is the concrete latency cost of the caching gaps above: it's not that answers are slow to generate, it's that Cortex pays full prefill cost on the same repeated content, every single turn.
+In Cortex: every turn still re-runs prefill over history, retrieved sources, and tool results — those genuinely change turn to turn and can't be cached. The static persona/tool block no longer needs to be part of that recomputation (see Cache-Friendly Prompt Structure), which is the one piece of prefill cost this project can actually eliminate rather than just pay every time.
 
 ---
 
@@ -260,7 +260,7 @@ In Cortex: every model in the stack is local and free (Ollama, in-process rerank
 
 Perceived latency (time to first useful output) often matters more to users than total latency — streaming is the standard fix.
 
-In Cortex: SSE streaming delivers tokens, tool steps, and widgets live rather than waiting for the full answer. Total wall-clock is measured per node via the `timed()` wrapper (`app/assistant_graph.py:118-125`) and summed with `operator.add`, excluding approval wait time. Parallel retrieval fan-out was tried and removed in favor of the simpler single-agent loop — a deliberate latency-for-simplicity tradeoff. The caching gaps above are the next real latency lever — every turn currently pays full prefill cost on repeated content.
+In Cortex: SSE streaming delivers tokens, tool steps, and widgets live rather than waiting for the full answer. Total wall-clock is measured per node via the `timed()` wrapper (`app/assistant_graph.py:118-125`) and summed with `operator.add`, excluding approval wait time. Parallel retrieval fan-out was tried and removed in favor of the simpler single-agent loop — a deliberate latency-for-simplicity tradeoff. The system message is now cache-friendly (see Cache-Friendly Prompt Structure), which is the structural precondition for Ollama to actually skip re-prefilling the static persona/tool text on every turn — whether it does so in practice isn't measured (see Cache Hits/Misses).
 
 ### Batching — N/A
 
