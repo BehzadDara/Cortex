@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     user_memory_enabled: bool = True
     user_memory_id: str = "local"
     user_memory_top_k: int = 5
+    user_memory_min_relevance: float = 0.5
     user_memory_list_limit: int = 200
     user_memory_duplicate_score: float = 0.95
     user_memory_conflict_score: float = 0.6

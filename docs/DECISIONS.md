@@ -2,6 +2,24 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-09-12 — mem0 was embedding memories without nomic's task prefixes
+
+Memory recall returned the top 5 facts with no relevance threshold, documented as deliberate: scores were said to be inseparable because mem0 does not use the query/passage prefixes `nomic-embed-text` was trained with. The first half was right, the conclusion was backwards — the prefixes were the fixable part.
+
+`OllamaEmbeddingProvider` already embeds documents as `search_document: …` and queries as `search_query: …`. mem0 was configured with its own `provider: "ollama"` embedder, which calls Ollama directly and prefixes neither, so every memory in the store and every recall query used a convention the model was not trained for. mem0's `EmbeddingBase.embed()` already takes a `memory_action` of `add`, `search`, or `update` and its Ollama implementation ignores it; `TaskPrefixedEmbedding` implements that hook by delegating to Cortex's own provider, so memories and documents now share one embedding convention and swapping the provider still touches one file. Registering it through `EmbedderFactory` does not work — mem0's pydantic config validates the provider name against a hardcoded list — so the instance is replaced after construction.
+
+Measured on 10 stored facts, 10 questions each answerable from exactly one of them, and 9 questions unrelated to any (`evals/recall.py`, isolated Qdrant collection, dropped afterwards):
+
+| | no prefixes | task prefixes |
+| --- | --- | --- |
+| worst relevant top score | 0.508 | 0.567 |
+| best irrelevant top score | 0.537 | 0.576 |
+| relevant facts kept at 0.55 | 7/10 | 10/10 |
+
+The distributions still overlap slightly, and the single worst case is instructive rather than broken: "What is the capital of Mongolia?" scores 0.576 against "The user lives in Tehran", which is a defensible semantic hit, not a failure. So there is no clean plateau of the kind the document relevance gate has, and the threshold is chosen for margin rather than for the best number on the sample: `user_memory_min_relevance = 0.5` keeps 10/10 relevant facts, leaves 7/9 unrelated questions recalling nothing at all, and cuts facts per question from 5.0 to 3.4. 0.55 measured identically on the relevant side and rejected 9/9, but the worst surviving fact sits within 0.02 of it, and dropping a fact the user actually told Cortex is the expensive error — an irrelevant fact only costs a few tokens.
+
+The two facts already in the store were re-embedded in place through Qdrant so their vectors match the new query convention; ids, payloads and timestamps are unchanged.
+
 ## 2026-09-12 — Pruning and compressing retrieved context have no user here
 
 Two textbook context hygiene techniques were checked against what this corpus and these runs actually look like, and both came back empty.

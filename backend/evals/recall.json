@@ -1,0 +1,37 @@
+{
+  "facts": [
+    "The user lives in Tehran",
+    "The user is a backend developer",
+    "The user prefers Python over Go",
+    "The user deploys with Docker Compose, never Kubernetes",
+    "The user has a cat named Mimi",
+    "The user drinks espresso without sugar",
+    "The user is learning Rust",
+    "The user's favourite editor is Helix",
+    "The user cycles to work",
+    "The user reads Persian poetry"
+  ],
+  "relevant": [
+    { "question": "Where do I live?", "expected": "tehran" },
+    { "question": "What do I do for a living?", "expected": "backend" },
+    { "question": "Which language should I write this script in?", "expected": "python" },
+    { "question": "How should I deploy this service?", "expected": "docker" },
+    { "question": "What is my pet called?", "expected": "mimi" },
+    { "question": "How do I take my coffee?", "expected": "espresso" },
+    { "question": "What language am I learning?", "expected": "rust" },
+    { "question": "Which editor do I use?", "expected": "helix" },
+    { "question": "How do I get to work?", "expected": "cycles" },
+    { "question": "What kind of poetry do I like?", "expected": "poetry" }
+  ],
+  "irrelevant": [
+    "What is the boiling point of water?",
+    "Who won the 2018 World Cup?",
+    "How many moons does Mars have?",
+    "Explain reciprocal rank fusion",
+    "What time is it in Tokyo?",
+    "How do I reverse a linked list?",
+    "What is the tallest mountain in Africa?",
+    "Summarise the ingestion pipeline",
+    "What is the price of bitcoin?"
+  ]
+}

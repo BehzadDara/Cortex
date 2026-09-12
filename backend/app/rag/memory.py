@@ -8,11 +8,29 @@ from urllib.parse import urlparse
 os.environ.setdefault("MEM0_TELEMETRY", "False")
 
 from mem0 import Memory as Mem0Memory
+from mem0.embeddings.base import EmbeddingBase
 from qdrant_client.http.exceptions import UnexpectedResponse
 
 from app.config import settings
+from app.rag.embeddings import OllamaEmbeddingProvider
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_memory_prompt, build_supersede_prompt
+
+class TaskPrefixedEmbedding(EmbeddingBase):
+    def __init__(self, config=None) -> None:
+        super().__init__(config)
+        self.embeddings = OllamaEmbeddingProvider()
+
+    def embed(self, text, memory_action=None):
+        if memory_action == "search":
+            return self.embeddings.embed_query(text)
+        return self.embeddings.embed_documents([text])[0]
+
+    def embed_batch(self, texts, memory_action="add"):
+        if memory_action == "search":
+            return [self.embeddings.embed_query(text) for text in texts]
+        return self.embeddings.embed_documents(texts)
+
 
 FACT_PREFIX = "The user"
 
@@ -123,6 +141,7 @@ class Mem0MemoryStore:
                 "history_db_path": settings.user_memory_history_path,
             }
         )
+        self.memory.embedding_model = TaskPrefixedEmbedding()
 
     def remember(self, message: str, source: dict) -> list[str]:
         stored = []
@@ -164,7 +183,11 @@ class Mem0MemoryStore:
 
     def recall(self, query: str) -> list[Memory]:
         found = self.search(query, limit=settings.user_memory_top_k)
-        return [to_memory(result) for result in found]
+        return [
+            to_memory(result)
+            for result in found
+            if result["score"] >= settings.user_memory_min_relevance
+        ]
 
     def all(self) -> list[Memory]:
         found = self.memory.get_all(
