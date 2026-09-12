@@ -502,11 +502,15 @@ def build_assistant_graph(
     return graph.compile(checkpointer=checkpointer)
 
 
-def system_message(
+def system_message() -> dict:
+    return {"role": "system", "content": SYSTEM_PROMPT}
+
+
+def context_message(
     timezone: str | None = None, memories: list[str] | None = None
 ) -> dict:
     today = datetime.now().strftime("%A, %B %-d, %Y")
-    content = f"{SYSTEM_PROMPT} Today is {today}."
+    content = f"Today is {today}."
     if timezone:
         content += f" The user's timezone is {timezone}."
     if memories:
@@ -523,8 +527,9 @@ def initial_state(
 ) -> AssistantState:
     return {
         "messages": [
-            system_message(timezone, memories),
+            system_message(),
             *history,
+            context_message(timezone, memories),
             {"role": "user", "content": question},
         ],
         "sources": [],
