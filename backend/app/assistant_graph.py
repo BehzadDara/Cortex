@@ -13,6 +13,7 @@ from langgraph.types import interrupt
 from app.config import settings
 from app.rag.llm import LLMProvider, ToolCall
 from app.rag.prompts import build_route_prompt
+from app.rag.sanitize import neutralize_instructions
 from app.tools import (
     DOCUMENT_SEARCH_DEFINITION,
     WEB_SEARCH_DEFINITION,
@@ -199,7 +200,7 @@ def format_source(source: dict) -> str:
     header = f"[{source['id']}] {source['filename']}"
     if source["url"]:
         header += f"\n{source['url']}"
-    content = source["content"]
+    content = neutralize_instructions(source["content"])
     if len(content) > MAX_SOURCE_CHARS:
         content = content[:MAX_SOURCE_CHARS] + "…"
     return f"{header}\n{content}"

@@ -12,7 +12,7 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 
 from app.config import settings
 from app.rag.llm import LLMProvider
-from app.rag.prompts import build_memory_prompt
+from app.rag.prompts import build_memory_prompt, build_supersede_prompt
 
 FACT_PREFIX = "The user"
 
@@ -129,6 +129,8 @@ class Mem0MemoryStore:
         for fact in extract_facts(self.llm, message):
             if self.already_known(fact):
                 continue
+            for memory_id in self.superseded_ids(fact):
+                self.forget(memory_id)
             self.memory.add(
                 [{"role": "user", "content": fact}],
                 user_id=self.user_id,
@@ -141,6 +143,19 @@ class Mem0MemoryStore:
     def already_known(self, fact: str) -> bool:
         hits = self.search(fact, limit=1)
         return bool(hits) and hits[0]["score"] >= settings.user_memory_duplicate_score
+
+    def superseded_ids(self, fact: str) -> list[str]:
+        related = self.search(fact, limit=settings.user_memory_conflict_candidates)
+        return [
+            hit["id"]
+            for hit in related
+            if hit["score"] >= settings.user_memory_conflict_score
+            and self.supersedes(fact, hit["memory"])
+        ]
+
+    def supersedes(self, fact: str, stored: str) -> bool:
+        decision = self.llm.complete(build_supersede_prompt(stored, fact))
+        return decision.strip().lower().startswith("yes")
 
     def search(self, query: str, limit: int) -> list[dict]:
         return self.memory.search(

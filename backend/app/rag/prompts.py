@@ -113,6 +113,24 @@ Message: {message}
 Facts:
 """
 
+SUPERSEDE_PROMPT = """Decide whether the new fact about the user replaces the old fact. Output exactly one word: yes or no.
+
+Answer yes only when both facts describe the same attribute of the user — the same home, job, name, or choice between alternatives — and cannot both be true at once, so keeping the old one would leave a wrong fact stored.
+Answer no whenever both can be true together: different attributes, extra detail, or a second item alongside the first. When unsure, answer no.
+
+Old: The user lives in Berlin. New: The user lives in Munich. -> yes
+Old: The user is a backend developer. New: The user is a product manager. -> yes
+Old: The user deploys with Docker Compose rather than Kubernetes. New: The user deploys with Kubernetes rather than Docker Compose. -> yes
+Old: The user is named Behzad. New: The user is named Ali. -> yes
+Old: The user is named Behzad. New: The user is a backend developer. -> no
+Old: The user lives in Berlin. New: The user works in Munich. -> no
+Old: The user is learning Rust. New: The user is learning Go. -> no
+Old: The user is colour-blind. New: The user cannot easily read red and green charts. -> no
+Old: The user uses Postgres. New: The user uses Postgres 16. -> no
+Old: The user prefers dark mode. New: The user prefers tea over coffee. -> no
+
+Old: {old} New: {new} ->"""
+
 TRANSCRIBE_PROMPT = """Transcribe all text visible in this image exactly. If the image contains diagrams, charts, or figures, describe each one briefly after the transcription. Output only the transcription and descriptions."""
 
 CAPTION_PROMPT = """Describe this image in one or two sentences so it can be found by search: what it shows, any prominent text, and what it is about. Output only the description."""
@@ -162,3 +180,7 @@ def build_summary_prompt(previous: str | None, transcript: str) -> str:
 
 def build_memory_prompt(message: str) -> str:
     return MEMORY_PROMPT.format(message=message)
+
+
+def build_supersede_prompt(old: str, new: str) -> str:
+    return SUPERSEDE_PROMPT.format(old=old, new=new)

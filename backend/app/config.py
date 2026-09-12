@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     user_memory_top_k: int = 5
     user_memory_list_limit: int = 200
     user_memory_duplicate_score: float = 0.95
+    user_memory_conflict_score: float = 0.6
+    user_memory_conflict_candidates: int = 3
     user_memory_history_path: str = str(BACKEND_ROOT / "user_memory" / "history.db")
     chat_max_rounds: int = 5
     llm_num_ctx: int = 16384
