@@ -1,3 +1,4 @@
+import json
 import time
 from collections.abc import Iterator
 from uuid import uuid4
@@ -18,6 +19,7 @@ from app.assistant_graph import (
     extract_steps,
     final_answer,
     initial_state,
+    state_prompt,
     state_question,
     state_usage,
 )
@@ -69,11 +71,6 @@ from app.tools import (
 
 router = APIRouter(tags=["assistant"])
 
-TRANSCRIPT_MESSAGE_CHARS = 500
-
-TRIMMED_NOTE = "[{count} oldest messages dropped to fit the context window]"
-
-
 def build_graph(
     session: Session,
     embeddings: EmbeddingProvider,
@@ -114,19 +111,6 @@ def build_graph(
         search_web_images,
         checkpointer=get_checkpointer(),
     )
-
-
-def format_transcript(messages: list[dict], dropped: int = 0) -> str:
-    lines = [TRIMMED_NOTE.format(count=dropped)] if dropped else []
-    for message in messages:
-        line = f"{message.get('role')}: {(message.get('content') or '')[:TRANSCRIPT_MESSAGE_CHARS]}"
-        tool_names = ", ".join(
-            call["function"]["name"] for call in message.get("tool_calls") or []
-        )
-        if tool_names:
-            line += f" [tools: {tool_names}]"
-        lines.append(line)
-    return "\n".join(lines)
 
 
 def start_run(
@@ -240,7 +224,7 @@ def stream_events(
     if final_state is not None:
         save_prompt_log(
             question,
-            format_transcript(final_state["messages"], usage.dropped_messages),
+            json.dumps(state_prompt(final_state), ensure_ascii=False),
             answer,
             started,
             usage.prompt_tokens,

@@ -61,7 +61,7 @@ def undroppable(groups: list[list[dict]]) -> set[int]:
     return kept
 
 
-def within_budget(messages: list[dict], reserved: int = 0) -> list[dict]:
+def kept_indices(messages: list[dict], reserved: int = 0) -> list[int]:
     budget = prompt_budget() - reserved
     head = leading_system(messages)
     groups = tool_result_groups(messages[len(head) :])
@@ -77,9 +77,14 @@ def within_budget(messages: list[dict], reserved: int = 0) -> list[dict]:
             break
         used += cost
         kept.add(index)
-    return head + [
-        message
-        for index, group in enumerate(groups)
-        if index in kept
-        for message in group
-    ]
+    offsets = list(range(len(head)))
+    position = len(head)
+    for index, group in enumerate(groups):
+        if index in kept:
+            offsets.extend(range(position, position + len(group)))
+        position += len(group)
+    return offsets
+
+
+def within_budget(messages: list[dict], reserved: int = 0) -> list[dict]:
+    return [messages[index] for index in kept_indices(messages, reserved)]

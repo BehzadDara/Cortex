@@ -11,7 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
 from app.config import settings
-from app.rag.budget import estimate_tokens, within_budget
+from app.rag.budget import estimate_tokens, kept_indices
 from app.rag.llm import LLMProvider, ToolCall
 from app.rag.prompts import build_route_prompt
 from app.rag.sanitize import neutralize_instructions
@@ -124,6 +124,7 @@ class AssistantState(TypedDict):
     prompt_tokens: Annotated[int, operator.add]
     response_tokens: Annotated[int, operator.add]
     dropped_messages: int
+    prompt_indices: list[int]
 
 
 @dataclass
@@ -405,7 +406,8 @@ def build_assistant_graph(
 
     def model(state: AssistantState) -> dict:
         writer = get_stream_writer()
-        prompt = within_budget(state["messages"], definitions_tokens)
+        indices = kept_indices(state["messages"], definitions_tokens)
+        prompt = [state["messages"][index] for index in indices]
         reply = llm.chat_stream(
             prompt,
             definitions,
@@ -421,6 +423,7 @@ def build_assistant_graph(
             "prompt_tokens": reply.prompt_tokens,
             "response_tokens": reply.response_tokens,
             "dropped_messages": len(state["messages"]) - len(prompt),
+            "prompt_indices": indices,
         }
 
     def run_tools(state: AssistantState) -> dict:
@@ -552,6 +555,7 @@ def initial_state(
         "prompt_tokens": 0,
         "response_tokens": 0,
         "dropped_messages": 0,
+        "prompt_indices": [],
     }
 
 
@@ -568,6 +572,12 @@ def final_answer(state: AssistantState) -> str:
         answer = last["content"]
         return answer if state.get("sources") else strip_citation_markers(answer)
     return FALLBACK_ANSWER
+
+
+def state_prompt(state: AssistantState) -> list[dict]:
+    messages = state["messages"]
+    indices = state.get("prompt_indices") or range(len(messages))
+    return [messages[index] for index in indices if index < len(messages)]
 
 
 def state_usage(state: AssistantState) -> RunUsage:
