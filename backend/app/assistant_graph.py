@@ -123,6 +123,7 @@ class AssistantState(TypedDict):
     elapsed_ms: Annotated[int, operator.add]
     prompt_tokens: Annotated[int, operator.add]
     response_tokens: Annotated[int, operator.add]
+    dropped_messages: int
 
 
 @dataclass
@@ -130,6 +131,7 @@ class RunUsage:
     elapsed_ms: int
     prompt_tokens: int
     response_tokens: int
+    dropped_messages: int
 
 
 def timed(node):
@@ -403,8 +405,9 @@ def build_assistant_graph(
 
     def model(state: AssistantState) -> dict:
         writer = get_stream_writer()
+        prompt = within_budget(state["messages"], definitions_tokens)
         reply = llm.chat_stream(
-            within_budget(state["messages"], definitions_tokens),
+            prompt,
             definitions,
             lambda token: writer({"type": "token", "content": token}),
         )
@@ -417,6 +420,7 @@ def build_assistant_graph(
             "rounds": state["rounds"] + 1,
             "prompt_tokens": reply.prompt_tokens,
             "response_tokens": reply.response_tokens,
+            "dropped_messages": len(state["messages"]) - len(prompt),
         }
 
     def run_tools(state: AssistantState) -> dict:
@@ -547,6 +551,7 @@ def initial_state(
         "elapsed_ms": 0,
         "prompt_tokens": 0,
         "response_tokens": 0,
+        "dropped_messages": 0,
     }
 
 
@@ -570,6 +575,7 @@ def state_usage(state: AssistantState) -> RunUsage:
         elapsed_ms=state.get("elapsed_ms", 0),
         prompt_tokens=state.get("prompt_tokens", 0),
         response_tokens=state.get("response_tokens", 0),
+        dropped_messages=state.get("dropped_messages", 0),
     )
 
 

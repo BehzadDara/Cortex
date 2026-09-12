@@ -2,7 +2,7 @@
 
 Cortex is 26 phases deep — hybrid search, reranking, LangGraph orchestration, conversation memory, mem0-backed user memory. This is a concept-by-concept read of the context/prompt-engineering field against what Cortex actually does today, with file and line, not vibes. Each concept is tagged **Implemented**, **Partial**, **Gap**, or **N/A** (not applicable to a local, single-user tool).
 
-Tally: 15 Implemented, 12 Partial, 5 Gap, 6 N/A.
+Tally: 18 Implemented, 9 Partial, 5 Gap, 6 N/A.
 
 ## Where to start, in order
 
@@ -12,7 +12,9 @@ Tally: 15 Implemented, 12 Partial, 5 Gap, 6 N/A.
 4. ~~Defend against instructions embedded in retrieved content.~~ **Done, the second way.** Asking the model to ignore embedded instructions (markers plus a `SYSTEM_PROMPT` rule) was shipped first and measured useless — qwen3:4b obeyed an injected chunk identically with and without it. Filtering the input instead works: `app/rag/sanitize.py` redacts instruction-shaped lines before the passage reaches the model, and the same attack that produced "PWNED" now answers the question. See [Instruction/Data Separation](#instruction-data-separation).
 5. ~~Stop storing contradicting facts about the user.~~ **Done.** `Mem0MemoryStore.remember()` now deletes a stored fact the new one supersedes, judged by the fast model behind a similarity guard. See [Context Conflict Resolution](#context-conflict-resolution).
 6. **Context isolation was considered and deliberately not built** — see [Context Isolation](#context-isolation) for why (nothing consumes the shared graph state except the model itself, so isolating it would be infrastructure with no user).
-7. **Next: real token accounting.** Per-result caps bound the worst case, but nothing counts tokens or checks that the assembled prompt fits `num_ctx` before the call. See [Context Budgets](#context-budgets) and [Token Usage](#token-usage).
+7. ~~Real token accounting.~~ **Done.** `app/rag/budget.py` estimates the assembled prompt — messages plus the eleven tool schemas — and drops the oldest content until it fits `num_ctx` minus an answer reserve, instead of letting Ollama truncate from the left and lose the system prompt. Both constants are measured, not guessed: 3 bytes/token over-estimates every sampled content type, and `prompt_logs` put the answer reserve at 4096. See [Context Budgets](#context-budgets) and [Token Usage](#token-usage).
+8. ~~Drop the right messages, and say so.~~ **Done.** The first guard trimmed message by message, so a five-round agent turn could squeeze out the live question (the model got passages and no question) and could keep a tool result whose assistant tool-call message was dropped. It now trims whole tool-call groups, never drops the question or the newest group, and reports how many messages it dropped so `prompt_logs` stops claiming the model saw text it never saw. See [Context Budgets](#context-budgets) and [Context Observability](#context-observability).
+9. **Next: nothing on this list.** What remains is either deliberately declined ([Context Isolation](#context-isolation)), reverted once already ([Cache-Friendly Prompt Structure](#cache-friendly-prompt-structure)), or a threshold waiting on measurement (`agent_min_relevance`, see [Lost-in-the-Middle](#lost-in-the-middle)).
 
 ---
 
@@ -20,23 +22,25 @@ Tally: 15 Implemented, 12 Partial, 5 Gap, 6 N/A.
 
 How much fits in one call, what it costs, and where quality quietly degrades before you hit any hard limit.
 
-### Context Windows — Partial
+### Context Windows — Implemented
 
 The context window is the total token budget one model call can see: system prompt + history + retrieved evidence + tool output + the model's own reply all share it. Pick it too small and Ollama silently truncates from the left, losing whatever came first — often the system prompt or oldest history.
 
-In Cortex: `llm_num_ctx: int = 16384` (`app/config.py:60`), applied identically to every call via `base_request()` (`app/rag/llm.py:44-51`) and vision calls (`app/rag/vision.py:25`). The fixed 16K is a deliberate, documented choice (`docs/ARCHITECTURE.md:54`) and a fine default. What's missing is a runtime check that a given run's assembled prompt actually fits under it — see Context Budgets below.
+In Cortex: `llm_num_ctx: int = 16384` (`app/config.py:60`), applied identically to every call via `base_request()` (`app/rag/llm.py:44-51`) and vision calls (`app/rag/vision.py:25`). The fixed 16K is a deliberate, documented choice (`docs/ARCHITECTURE.md:54`) and a fine default, and the assembled prompt is now checked against it before every call rather than after — see Context Budgets below.
 
-### Token Usage — Partial
+### Token Usage — Implemented
 
 Tracking tokens per call is how you catch runaway context growth before it becomes a truncation bug or a latency problem — it's the instrument, not the fix.
 
-In Cortex: counts come only from Ollama's own `prompt_eval_count` / `eval_count` in the streamed `done` chunk (`app/rag/llm.py:75-77`), summed across tool rounds via the `operator.add` reducer on `AssistantState` (`app/assistant_graph.py:107-108`), and logged to `prompt_logs`. No local tokenizer (`tiktoken` or equivalent) exists anywhere in the codebase. Fine as a post-hoc metric; not usable as a pre-flight guard, since you only learn the count after Ollama has already run (and possibly already truncated). A cheap local estimate (even a chars/4 heuristic) before the call would let you warn or trim proactively.
+In Cortex: counts come only from Ollama's own `prompt_eval_count` / `eval_count` in the streamed `done` chunk (`app/rag/llm.py:75-77`), summed across tool rounds via the `operator.add` reducer on `AssistantState` (`app/assistant_graph.py:107-108`), and logged to `prompt_logs`. Those are post-hoc: you only learn them after Ollama has run (and possibly already truncated). The pre-flight side now exists as `estimate_tokens()` (`app/rag/budget.py`), counting **bytes**, not characters — the usual chars/4 ran -9% on an indexed `docker-compose.yml` and -52% on Persian prose, and under-estimating is the direction that defeats a guard, while 3 bytes/token over-estimates every sampled content type (English prose, Python, PDF text, YAML, Persian, mixed script, emoji). Still no real tokenizer (`tiktoken` or equivalent) in the codebase; a calibrated over-estimate is enough for a guard, and Ollama's own counts remain the metric of record.
 
-### Context Budgets — Partial
+### Context Budgets — Implemented
 
 A context budget is an explicit allocation — "system gets ~500 tokens, history gets ~2K, retrieved evidence gets ~4K" — enforced before the call, not discovered after it. Without one, whichever piece happens to be biggest that turn (a long web page, a chatty history) eats the room the others needed.
 
-In Cortex: still no formal allocator across segments — system prompt, history, retrieved sources, and tool results are all concatenated into `messages` (`app/assistant_graph.py:445-464`+) with no per-segment token accounting. But the worst case is now bounded: `format_source()` caps each passage at `MAX_SOURCE_CHARS = 2000`, other tool outputs cap at `MAX_TOOL_OUTPUT_CHARS = 4000`, and cross-call dedup (see Deduplication) stops the same evidence from being counted twice. A single run can no longer blow the budget from one oversized result — it can still grow from a long conversation history, which has no token-based cap (see Conversation Summarization).
+In Cortex: there is still no per-segment allocator — "system gets 500, history gets 2K" — but there is now a total, enforced before the call. `within_budget()` (`app/rag/budget.py`) estimates the message list plus the tool schemas against `llm_num_ctx - llm_response_tokens` (16384 - 4096) and drops the oldest content until it fits; the `model` node applies it at the call site, not in graph state, so checkpoints, traces, and persisted history keep the full record. The worst case per piece is bounded too: `format_source()` caps each passage at `MAX_SOURCE_CHARS = 2000`, other tool outputs at `MAX_TOOL_OUTPUT_CHARS = 4000`, and cross-call dedup (see Deduplication) stops the same evidence from being counted twice.
+
+What it drops matters as much as that it drops. Trimming message by message had two failure modes, both reproduced before fixing: with five rounds of searches in one turn the newest passages ate the budget and the loop broke *before* reaching the live user question, so the model received evidence and no question (measured: question dropped in the 5-round shape); and at certain sizes a `tool` result survived while the assistant `tool_calls` message that produced it was dropped, leaving an orphan result (6 of 1286 swept passage sizes). `within_budget()` now trims whole tool-call groups — an assistant message and its results move together — and treats the last user message and the newest group as undroppable. Fuzzed over 3000 random conversation shapes: 0 dropped questions, 0 orphaned tool results, system prefix always kept, original order preserved, and never over budget except when the undroppable core alone exceeds it. A long conversation history still has no token-based *summarization* trigger (see Conversation Summarization); this guard is the backstop, not the plan.
 
 ### Lost-in-the-Middle — Partial
 
@@ -304,7 +308,9 @@ This closes the loop with Cortex's own house rule: "any change to chunking, sear
 
 Being able to see exactly what context a given answer was produced from — not just the final response, but the full assembled prompt, retrieved evidence, and tool trace behind it.
 
-In Cortex: `prompt_logs` (`app/models.py:144-157`) stores question, response, model, latency, and token counts per run, plus every executed step persisted as JSONB on the assistant message so old chats replay their full trace. One nuance: the logged `prompt` field is `format_transcript()` (`app/api/assistant.py:117-127`) — a human-readable, per-message-truncated-at-500-chars transcript — not the literal JSON payload sent to Ollama, so it's good for a human reading the dashboard but not a byte-exact replay of what the model actually saw.
+In Cortex: `prompt_logs` (`app/models.py:144-157`) stores question, response, model, latency, and token counts per run, plus every executed step persisted as JSONB on the assistant message so old chats replay their full trace. The logged `prompt` field is `format_transcript()` (`app/api/assistant.py`) — a human-readable, per-message-truncated-at-500-chars transcript — not the literal JSON payload sent to Ollama, so it's good for a human reading the log but not a byte-exact replay.
+
+Budget trimming would have made that gap worse by making it *wrong*: the transcript is built from `state["messages"]`, the untrimmed list, so a run whose history was dropped at the call site would log context the model never saw. The `model` node now returns `dropped_messages` (how many the last call left out), `state_usage()` carries it, and the transcript opens with `[N oldest messages dropped to fit the context window]` when it happened. The count is the last call's, which is also the largest, since context only grows within a run.
 
 ### Context Evaluation — Implemented
 

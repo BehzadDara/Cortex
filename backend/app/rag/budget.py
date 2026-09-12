@@ -30,16 +30,56 @@ def leading_system(messages: list[dict]) -> list[dict]:
     return kept
 
 
+def tool_result_groups(messages: list[dict]) -> list[list[dict]]:
+    groups: list[list[dict]] = []
+    for message in messages:
+        if message.get("role") == "tool" and groups:
+            groups[-1].append(message)
+        else:
+            groups.append([message])
+    return groups
+
+
+def last_question(groups: list[list[dict]]) -> int | None:
+    return next(
+        (
+            index
+            for index in reversed(range(len(groups)))
+            if groups[index][0].get("role") == "user"
+        ),
+        None,
+    )
+
+
+def undroppable(groups: list[list[dict]]) -> set[int]:
+    if not groups:
+        return set()
+    kept = {len(groups) - 1}
+    question = last_question(groups)
+    if question is not None:
+        kept.add(question)
+    return kept
+
+
 def within_budget(messages: list[dict], reserved: int = 0) -> list[dict]:
     budget = prompt_budget() - reserved
     head = leading_system(messages)
-    used = estimate_messages(head)
-    tail: list[dict] = []
-    for message in reversed(messages[len(head) :]):
-        cost = estimate_message(message)
-        if tail and used + cost > budget:
+    groups = tool_result_groups(messages[len(head) :])
+    kept = undroppable(groups)
+    used = estimate_messages(head) + sum(
+        estimate_messages(groups[index]) for index in kept
+    )
+    for index in reversed(range(len(groups))):
+        if index in kept:
+            continue
+        cost = estimate_messages(groups[index])
+        if used + cost > budget:
             break
         used += cost
-        tail.append(message)
-    tail.reverse()
-    return head + tail
+        kept.add(index)
+    return head + [
+        message
+        for index, group in enumerate(groups)
+        if index in kept
+        for message in group
+    ]

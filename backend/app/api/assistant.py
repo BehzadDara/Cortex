@@ -71,6 +71,8 @@ router = APIRouter(tags=["assistant"])
 
 TRANSCRIPT_MESSAGE_CHARS = 500
 
+TRIMMED_NOTE = "[{count} oldest messages dropped to fit the context window]"
+
 
 def build_graph(
     session: Session,
@@ -114,8 +116,8 @@ def build_graph(
     )
 
 
-def format_transcript(messages: list[dict]) -> str:
-    lines = []
+def format_transcript(messages: list[dict], dropped: int = 0) -> str:
+    lines = [TRIMMED_NOTE.format(count=dropped)] if dropped else []
     for message in messages:
         line = f"{message.get('role')}: {(message.get('content') or '')[:TRANSCRIPT_MESSAGE_CHARS]}"
         tool_names = ", ".join(
@@ -238,7 +240,7 @@ def stream_events(
     if final_state is not None:
         save_prompt_log(
             question,
-            format_transcript(final_state["messages"]),
+            format_transcript(final_state["messages"], usage.dropped_messages),
             answer,
             started,
             usage.prompt_tokens,
