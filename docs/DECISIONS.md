@@ -2,6 +2,18 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-09-12 — Pruning and compressing retrieved context have no user here
+
+Two textbook context hygiene techniques were checked against what this corpus and these runs actually look like, and both came back empty.
+
+**Compression of retrieved evidence.** `format_source()` caps a passage at `MAX_SOURCE_CHARS = 2000` before it reaches the model, and the obvious upgrade is query-focused trimming — keep the sentences that match the question, drop the rest — instead of a blunt cut. Measured over the indexed corpus: 98 chunks, median length 999 characters, 90th percentile 1358, maximum 2128. Two chunks exceed the cap and the largest overshoot is 128 characters. The chunker (`chunk_size = 1000`, code split by lines) is already the compressor; the cap is a backstop for the rare oversized chunk, and anything cleverer would operate on 2% of passages for a 6% saving on each.
+
+**Pruning consumed tool results.** Pruning pays off when a run accumulates tool output the model has already acted on and keeps re-reading. Measured over the 94 persisted step traces in the database: 75 runs made exactly one tool call, 16 made two, two made three, one made four. In 80% of runs the single tool result is consumed by the very next model call and the run ends, so there is no later round to prune it from; in the remaining 20% the earlier results are usually what the model is synthesising across, and run-time dedup already prevents the same chunk appearing twice. Removing a result the model still wants is the failure mode, and the budget trimmer already handles the only pressure that actually exists.
+
+What did need fixing was a name. `RESULT_PREVIEW_CHARS` truncates the tool output streamed to the UI and to the persisted step trace, never what the model reads, and sitting beside `MAX_SOURCE_CHARS` and `MAX_TOOL_OUTPUT_CHARS` it read like a third token-budget control. It is now `STREAM_PREVIEW_CHARS`.
+
+Lesson: "is this technique in the codebase?" is the wrong question. The right one is "what would it act on here, and how often?" — both of these have a real answer in SQL, and both answers were smaller than the cost of the machinery.
+
 ## 2026-09-12 — The system-message split earns nothing on Ollama, measured twice
 
 `system_message()` builds one string: static persona and tool rules, then today's date, the timezone, and the facts recalled for *this* question. Recall changes per question, so the system message differs on nearly every turn, and the textbook advice is to split it — static prefix first, variable suffix last — so a prefix cache can reuse the stable part. That split was implemented, shipped, and reverted earlier with no recorded reason. Before re-landing it, both of its justifications were measured.

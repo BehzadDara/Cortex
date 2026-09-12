@@ -101,7 +101,7 @@ DECLINED_RESULT = "The user declined the web search."
 
 APPROVAL_TOOLS = {"web_search", "web_image_search", "web_video_search"}
 
-RESULT_PREVIEW_CHARS = 500
+STREAM_PREVIEW_CHARS = 500
 
 MAX_SOURCE_CHARS = 2000
 
@@ -169,9 +169,9 @@ def execute_tool(tool_map: dict[str, Tool], call: ToolCall) -> ToolOutput:
 
 
 def preview(result: str) -> str:
-    if len(result) <= RESULT_PREVIEW_CHARS:
+    if len(result) <= STREAM_PREVIEW_CHARS:
         return result
-    return result[:RESULT_PREVIEW_CHARS] + "…"
+    return result[:STREAM_PREVIEW_CHARS] + "…"
 
 
 def cap_tool_output(result: str) -> str:
