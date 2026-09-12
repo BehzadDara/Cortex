@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     chat_max_rounds: int = 5
     llm_num_ctx: int = 16384
     llm_response_tokens: int = 4096
-    agent_min_relevance: float = 0.0
+    agent_min_relevance: float = -7.0
     web_search_results: int = 5
 
 

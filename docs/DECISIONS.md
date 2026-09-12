@@ -2,6 +2,18 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-09-12 — The relevance gate was mis-calibrated, and the eval could not see it
+
+Web fallback needed "no relevant results", which vector search has no concept of, so the agent filters evidence by cross-encoder score (`agent_min_relevance`, see the 2026-08 entry below) and falls back to the web when nothing survives. The threshold shipped at `0.0` on the reasoning that irrelevant pairs score below zero. True — but not the converse, and `0.0` is an active filter, not the no-op it was taken for.
+
+Measured over the 29-question golden set through the production funnel: three real passages score below zero (Great Red Spot -0.99, asteroid belt -0.73, Triton's orbit -3.49), so the live agent path ran at 26/29 hit-rate and 0.897 MRR while `evals/run.py` — which called `retrieve_chunks()` with no `min_score` at all — reported 29/29 and 1.000. The eval was measuring a funnel production does not use, which is the only reason a 10% hit-rate loss went unnoticed through two phases.
+
+The scale is logits, roughly -11 to +11. Worst true passage: -3.49. Best of the 60 candidates pulled by 12 out-of-corpus questions: -10.11. Every threshold in `[-10.0, -3.5]` holds 29/29 hit-rate and returns nothing at all for 12/12 out-of-corpus questions, so `-7.0` sits mid-plateau instead of at an edge. Passages per golden question fall from 4.8 to 1.5 — the gate now removes filler as well as enabling the web fallback.
+
+Live through the graph, the old default's cost was plain. "What is special about the orbit of Triton?" returned zero sources and answered *"I don't have information about the special features of Triton's orbit in my current knowledge base"* — about a question its own corpus answers. "What is the Great Red Spot?" also returned zero sources and answered from the model's own parametric memory, uncited, which is the worse failure of the two: a confident ungrounded answer looks exactly like a grounded one. At -7.0 both answer from `solar-system.md` with a citation, and faster (63 s to 16 s, 38 s to 9 s) because the model stops spending rounds re-searching for evidence the gate had thrown away. An out-of-corpus control ("who won the 2018 World Cup final") still returns zero sources at both thresholds, as it should.
+
+Two eval changes so this cannot drift silently again: `build_retrieve()` passes `settings.agent_min_relevance`, so the eval runs the same funnel as `search_documents`; and `evals/negatives.json` adds 12 questions with no answer in the corpus, reported as `out-of-corpus rejected` — 12/12 at -7.0, 0/12 with the gate off. Lesson, restated: a threshold is only as trustworthy as the evaluation that can see it, and "top-k is not relevant-k" cuts both ways — a gate set too high quietly discards evidence exactly as a gate set too low quietly admits noise.
+
 ## 2026-09-06 — mem0 keeps the memories, Cortex keeps the prompt
 
 User memory is the first thing Cortex needed that its own conversation machinery could not give: summaries and recent messages live on a path in one conversation tree, so everything the user says about themselves dies with the chat it was said in. mem0 was adopted for the durable half — but not the half it advertises.

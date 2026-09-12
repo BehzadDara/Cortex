@@ -25,10 +25,15 @@ from app.dependencies import (
     get_web_search,
 )
 from app.models import Chunk
+from app.rag.embeddings import EmbeddingProvider
 from app.rag.prompts import build_answer_prompt
+from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
+from app.rag.vector_store import VectorStore
 
 GOLDEN_PATH = Path(__file__).parent / "golden.json"
+
+NEGATIVES_PATH = Path(__file__).parent / "negatives.json"
 
 CITATION_NUMBER = re.compile(r"\[(\d+)\]")
 
@@ -67,6 +72,26 @@ def correct_source_id(sources: list[dict], item: dict) -> int | None:
     )
 
 
+def build_retrieve(
+    session: Session,
+    embeddings: EmbeddingProvider,
+    vector_store: VectorStore,
+    reranker: Reranker | None,
+):
+    def retrieve(question: str) -> list[Chunk]:
+        return retrieve_chunks(
+            session,
+            question,
+            settings.top_k,
+            embeddings,
+            vector_store,
+            reranker=reranker,
+            min_score=settings.agent_min_relevance,
+        )
+
+    return retrieve
+
+
 def build_eval_graph(session: Session):
     return build_graph(
         session,
@@ -102,13 +127,19 @@ def run_assistant(graph, question: str) -> dict:
         graph_input = Command(resume=False)
 
 
-def evaluate(session: Session, items: list[dict], with_generation: bool) -> None:
+def evaluate(
+    session: Session,
+    items: list[dict],
+    negatives: list[str],
+    with_generation: bool,
+) -> None:
     embeddings = get_embedding_provider()
     vector_store = get_vector_store()
     llm = get_llm_provider()
     reranker = get_reranker() if settings.rerank else None
     if reranker:
         reranker.rerank("warm up", ["warm up"])
+    retrieve = build_retrieve(session, embeddings, vector_store, reranker)
 
     hits = 0
     first_hits = 0
@@ -119,14 +150,7 @@ def evaluate(session: Session, items: list[dict], with_generation: bool) -> None
 
     for item in items:
         started = time.perf_counter()
-        chunks = retrieve_chunks(
-            session,
-            item["question"],
-            settings.top_k,
-            embeddings,
-            vector_store,
-            reranker=reranker,
-        )
+        chunks = retrieve(item["question"])
         retrieval_seconds.append(time.perf_counter() - started)
 
         rank = retrieval_rank(chunks, item)
@@ -157,6 +181,11 @@ def evaluate(session: Session, items: list[dict], with_generation: bool) -> None
     print(f"hit@1: {first_hits}/{total} = {first_hits / total:.0%}")
     print(f"MRR: {reciprocal_sum / total:.3f}")
     print(f"avg retrieval: {statistics.mean(retrieval_seconds) * 1000:.0f} ms")
+    rejected = sum(1 for question in negatives if not retrieve(question))
+    print(
+        f"out-of-corpus rejected: {rejected}/{len(negatives)} = "
+        f"{rejected / len(negatives):.0%}"
+    )
     if with_generation:
         print(f"answer accuracy: {correct}/{total} = {correct / total:.0%}")
         print(f"avg generation: {statistics.mean(generation_seconds):.1f} s")
@@ -217,11 +246,17 @@ def main() -> None:
     arguments = parser.parse_args()
 
     items = json.loads(GOLDEN_PATH.read_text())
+    negatives = json.loads(NEGATIVES_PATH.read_text())
     with SessionLocal() as session:
         if arguments.assistant:
             evaluate_assistant(session, items)
         else:
-            evaluate(session, items, with_generation=not arguments.retrieval_only)
+            evaluate(
+                session,
+                items,
+                negatives,
+                with_generation=not arguments.retrieval_only,
+            )
 
 
 if __name__ == "__main__":
