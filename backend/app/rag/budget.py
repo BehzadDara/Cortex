@@ -85,6 +85,3 @@ def kept_indices(messages: list[dict], reserved: int = 0) -> list[int]:
         position += len(group)
     return offsets
 
-
-def within_budget(messages: list[dict], reserved: int = 0) -> list[dict]:
-    return [messages[index] for index in kept_indices(messages, reserved)]
