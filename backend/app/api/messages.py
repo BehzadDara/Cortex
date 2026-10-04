@@ -1,10 +1,10 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.assistant import build_graph, start_run, stream_events
+from app.api.assistant import build_graph, recall_for, start_run, stream_events
 from app.api.conversations import fallback_title, to_message_response, to_summary
 from app.assistant_graph import initial_state
 from app.dependencies import (
@@ -13,7 +13,6 @@ from app.dependencies import (
     get_image_generator,
     get_llm_provider,
     get_market_data_provider,
-    get_memory_store,
     get_reranker,
     get_session,
     get_vector_store,
@@ -31,7 +30,6 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.image_generation import ImageGenerator
 from app.rag.llm import LLMProvider
 from app.rag.market_data import MarketDataProvider
-from app.rag.memory import recall_quietly
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
@@ -44,8 +42,11 @@ from app.schemas import (
     PathResponse,
     RegenerateRequest,
 )
+from app.tracing import record_feedback
 
 router = APIRouter(prefix="/messages", tags=["messages"])
+
+VOTE_SCORES = {"like": 1, "dislike": 0}
 
 
 def branch_title(source: Conversation) -> str:
@@ -97,7 +98,7 @@ def run_variant(
                 history,
                 question,
                 timezone,
-                recall_quietly(get_memory_store(), question),
+                recall_for(conversation.id, question),
             ),
             thread_id,
             conversation.id,
@@ -137,11 +138,19 @@ def graph_providers(
 def set_feedback(
     message_id: int,
     request: FeedbackRequest,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ) -> FeedbackResponse:
     message = require_message(session, message_id, "assistant")
     message.feedback = request.value
     session.commit()
+    if message.trace_id:
+        background_tasks.add_task(
+            record_feedback,
+            message.trace_id,
+            "user_vote",
+            VOTE_SCORES.get(request.value),
+        )
     return FeedbackResponse(id=message_id, feedback=message.feedback)
 
 

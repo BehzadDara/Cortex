@@ -39,6 +39,7 @@ import type {
   Widget,
 } from "../types";
 import { WidgetList } from "./ChatWidgets";
+import { DocumentViewer } from "./DocumentViewer";
 
 interface Attachment {
   name: string;
@@ -422,6 +423,19 @@ function Markdown({ children }: { children: string }) {
   );
 }
 
+const TEXT_FRAGMENT_WORDS = 8;
+
+function highlightedUrl(url: string, snippet: string): string {
+  const words = snippet
+    .replace(/…|\.\.\./g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, TEXT_FRAGMENT_WORDS);
+  if (url.includes("#") || words.length < 3) return url;
+  const fragment = encodeURIComponent(words.join(" ")).replace(/-/g, "%2D");
+  return `${url}#:~:text=${fragment}`;
+}
+
 function AnswerBody({
   content,
   sources,
@@ -430,6 +444,7 @@ function AnswerBody({
   sources?: Source[];
 }) {
   const [activeSource, setActiveSource] = useState<number | null>(null);
+  const [readingSource, setReadingSource] = useState<Source | null>(null);
   const sourceMap = new Map((sources ?? []).map((source) => [source.id, source]));
   const linked = content.replace(/\[(\d+)\](?!\()/g, (match, id) =>
     sourceMap.has(Number(id)) ? `[${id}](#source-${id})` : match,
@@ -474,15 +489,33 @@ function AnswerBody({
           <div className="source-title">
             {active.url ? <GlobeIcon /> : <FileIcon />}
             {active.url ? (
-              <a href={active.url} target="_blank" rel="noopener noreferrer">
+              <a
+                href={highlightedUrl(active.url, active.content)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 {active.filename}
               </a>
             ) : (
-              active.filename
+              <>
+                {active.filename}
+                <button
+                  className="source-open"
+                  onClick={() => setReadingSource(active)}
+                >
+                  Show in document
+                </button>
+              </>
             )}
           </div>
           <div className="source-content">{active.content}</div>
         </div>
+      )}
+      {readingSource && (
+        <DocumentViewer
+          source={readingSource}
+          onClose={() => setReadingSource(null)}
+        />
       )}
     </>
   );

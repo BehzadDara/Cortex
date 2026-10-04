@@ -18,7 +18,8 @@ from app.dependencies import (
     get_vision_provider,
 )
 from app.jobs import create_job, run_crawl, run_repository
-from app.models import Collection, Document
+from app.models import Chunk, Collection, Document
+from app.rag.chunking import stitch_chunks
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.file_store import FileStore
 from app.rag.ingestion import DuplicateDocumentError, ingest_document
@@ -29,11 +30,51 @@ from app.schemas import (
     CrawlRequest,
     DocumentResponse,
     JobResponse,
+    PassageRequest,
+    PassageResponse,
     RepositoryRequest,
     to_job_response,
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def find_chunk(session: Session, filename: str, content: str) -> Chunk | None:
+    query = (
+        select(Chunk)
+        .join(Document)
+        .where(Document.filename == filename, Chunk.content == content)
+        .limit(1)
+    )
+    return session.scalars(query).first()
+
+
+def document_chunks(session: Session, document_id: int) -> list[Chunk]:
+    query = (
+        select(Chunk)
+        .where(Chunk.document_id == document_id)
+        .order_by(Chunk.position)
+    )
+    return list(session.scalars(query))
+
+
+@router.post("/passage", response_model=PassageResponse)
+def locate_passage(
+    request: PassageRequest, session: Session = Depends(get_session)
+) -> PassageResponse:
+    cited = find_chunk(session, request.filename, request.content)
+    if cited is None:
+        raise HTTPException(status_code=404, detail="Passage not found")
+    chunks = document_chunks(session, cited.document_id)
+    text, starts = stitch_chunks([chunk.content for chunk in chunks])
+    start = starts[[chunk.id for chunk in chunks].index(cited.id)]
+    return PassageResponse(
+        document_id=cited.document_id,
+        filename=request.filename,
+        text=text,
+        start=start,
+        end=start + len(cited.content),
+    )
 
 
 def to_response(document: Document) -> DocumentResponse:

@@ -7,6 +7,7 @@ import type {
   ImageAnswer,
   Job,
   Memory,
+  Passage,
   PromptLog,
   Source,
   Stats,
@@ -68,6 +69,12 @@ export async function deleteConversation(id: number): Promise<void> {
 }
 
 export const getDocuments = () => request<Doc[]>("/documents");
+
+export const locatePassage = (source: Source) =>
+  request<Passage>(
+    "/documents/passage",
+    jsonInit("POST", { filename: source.filename, content: source.content }),
+  );
 
 export async function uploadDocument(
   file: File,

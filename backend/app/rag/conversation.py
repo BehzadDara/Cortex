@@ -130,6 +130,7 @@ def save_answer(
     elapsed_ms: int | None = None,
     prompt_tokens: int | None = None,
     response_tokens: int | None = None,
+    trace_id: str | None = None,
 ) -> int:
     with SessionLocal() as session:
         assistant_message = Message(
@@ -142,6 +143,7 @@ def save_answer(
             elapsed_ms=elapsed_ms,
             prompt_tokens=prompt_tokens,
             response_tokens=response_tokens,
+            trace_id=trace_id,
         )
         attach(session, assistant_message, parent_id)
         session.commit()
@@ -160,6 +162,7 @@ def save_exchange(
     elapsed_ms: int | None = None,
     prompt_tokens: int | None = None,
     response_tokens: int | None = None,
+    trace_id: str | None = None,
 ) -> int:
     with SessionLocal() as session:
         user_message = Message(
@@ -179,6 +182,7 @@ def save_exchange(
             elapsed_ms=elapsed_ms,
             prompt_tokens=prompt_tokens,
             response_tokens=response_tokens,
+            trace_id=trace_id,
         )
         attach(session, assistant_message, user_message.id)
         session.commit()

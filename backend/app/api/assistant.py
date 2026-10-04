@@ -61,6 +61,7 @@ from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
 from app.rag.web_search import WebSearchProvider
 from app.schemas import AskRequest, ContinueRequest, ResumeRequest, StopRequest
+from app.tracing import conversation_thread
 from app.tools import (
     build_document_search,
     build_knowledge_image_search,
@@ -157,9 +158,15 @@ def save_prompt_log(
         session.commit()
 
 
-def run_config(thread_id: str, conversation_id: int) -> dict:
+def recall_for(conversation_id: int, question: str) -> list[str]:
+    with conversation_thread(conversation_id):
+        return recall_quietly(get_memory_store(), question)
+
+
+def run_config(thread_id: str, conversation_id: int, trace_id: str) -> dict:
     return {
         "configurable": {"thread_id": thread_id},
+        "run_id": trace_id,
         "run_name": "Assistant",
         "metadata": {"thread_id": str(conversation_id)},
     }
@@ -180,10 +187,12 @@ def stream_events(
         yield sse_event({"type": "snapshot", **snapshot})
 
     started = time.perf_counter()
+    trace_id = str(uuid4())
     final_state = None
+    approval = None
     stream = graph.stream(
         graph_input,
-        run_config(thread_id, conversation_id),
+        run_config(thread_id, conversation_id, trace_id),
         stream_mode=["custom", "updates", "values"],
     )
     for mode, chunk in stream:
@@ -191,14 +200,15 @@ def stream_events(
             yield sse_event(chunk)
         elif mode == "updates" and "__interrupt__" in chunk:
             approval = chunk["__interrupt__"][0].value
-            yield sse_event({"type": "approval", **approval, "thread": thread_id})
-            return
         elif mode == "values":
             final_state = chunk
         event = title_event(conversation_id, holder)
         if event:
             yield event
 
+    if approval is not None:
+        yield sse_event({"type": "approval", **approval, "thread": thread_id})
+        return
     event = title_event(conversation_id, holder)
     if event:
         yield event
@@ -225,6 +235,7 @@ def stream_events(
             elapsed_ms=usage.elapsed_ms,
             prompt_tokens=usage.prompt_tokens,
             response_tokens=usage.response_tokens,
+            trace_id=trace_id,
         )
         clear_active_thread(conversation_id)
         yield sse_event({"type": "saved", "message_id": message_id})
@@ -239,12 +250,13 @@ def stream_events(
             usage.prompt_tokens,
             usage.response_tokens,
         )
-        summarize_if_due(conversation_id, llm)
-        remember_quietly(
-            get_memory_store(),
-            question,
-            {"conversation_id": conversation_id, "message_id": message_id},
-        )
+        with conversation_thread(conversation_id):
+            summarize_if_due(conversation_id, llm)
+            remember_quietly(
+                get_memory_store(),
+                question,
+                {"conversation_id": conversation_id, "message_id": message_id},
+            )
 
 
 @router.post("/assistant")
@@ -292,7 +304,7 @@ def assistant(
                 history,
                 request.question,
                 request.timezone,
-                recall_quietly(get_memory_store(), request.question),
+                recall_for(conversation.id, request.question),
             ),
             thread_id,
             conversation.id,

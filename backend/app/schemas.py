@@ -23,6 +23,19 @@ class DocumentResponse(BaseModel):
     created_at: datetime
 
 
+class PassageRequest(BaseModel):
+    filename: str
+    content: str
+
+
+class PassageResponse(BaseModel):
+    document_id: int
+    filename: str
+    text: str
+    start: int
+    end: int
+
+
 class CrawlRequest(BaseModel):
     url: str
     collection_id: int | None = None

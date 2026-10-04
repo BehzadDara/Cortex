@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import Conversation
 from app.rag.conversation import placeholder_title, save_title
 from app.rag.llm import LLMProvider
+from app.tracing import conversation_thread
 
 
 def sse_event(payload: dict) -> str:
@@ -39,7 +40,8 @@ def start_title_generation(
     llm: LLMProvider, conversation_id: int, question: str, holder: dict
 ) -> None:
     def work() -> None:
-        title = save_title(llm, conversation_id, question)
+        with conversation_thread(conversation_id):
+            title = save_title(llm, conversation_id, question)
         if title:
             holder["title"] = title
 

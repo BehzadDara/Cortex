@@ -2,6 +2,16 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-10-04 — Votes on traces, whole turns in threads, and a citation reader
+
+**Votes.** The graph's root run id is now chosen by Cortex (`run_id` in the run config) and stored on the assistant message as `trace_id`, so a vote can find its trace. The feedback id is derived from the trace id (`uuid5`), which makes the vote idempotent: update it, create it on 404, delete it when cleared. It is sent as a background task so voting stays instant, and only when tracing is on. Older answers and branch copies have no trace id and simply skip it.
+
+**Threads.** Memory recall, title generation, summaries and fact extraction run outside the graph, so they were separate root traces with no thread. They now run inside a `thread_id` tracing context set to the conversation id. Verified: all four traces of one turn land in the same thread.
+
+**GeneratorExit.** When a run paused for web-search approval, the SSE generator returned in the middle of `graph.stream`, so LangChain closed the run with `GeneratorExit` and LangSmith showed every approval pause as an error. The loop now drains the stream and sends the approval event afterwards; the paused run closes cleanly.
+
+**Citation reader.** The earlier note that "the original text cannot be reconstructed from overlapping chunks" holds for hashing, not for reading: stitching consecutive chunks at their longest suffix/prefix overlap (minimum 20 characters, else a newline) found the overlap on 55 of 55 joins across all 43 indexed documents. The passage is located by the source's filename and exact text rather than a new chunk id, because sources already store the chunk verbatim — so every answer ever saved works without a migration.
+
 ## 2026-10-04 — Memory extraction ignored age and birthdays
 
 "I was born in 1998" was never remembered: the first LangSmith trace of it showed gemma3:4b answering `none`, because the extraction prompt's list of durable facts named home, job, tools, preferences and health but not age or birth date, and a 4B model reads that list as exhaustive. The eval had no such case either, so it reported 36/36 over the gap. Six cases were added (birth year, age, birthday, birth year followed by a question, and two that must stay empty); baseline 38/42, every personal-detail case missed. Adding age and birth date to the definition fixed those but exposed a second fragility: a fact followed by a question ("I'm allergic to peanuts, is that in a Snickers?") now came back `none`, since the prompt says to ignore questions and never showed a mixed message. One rule sentence ("keep the statement and drop the question") and one mixed example fixed it. A birthday example was tried twice and dropped: wherever it went, a different existing case broke. Result: 42/42 on two runs, extraction ~0.56 s → ~0.7 s from the longer prompt.

@@ -39,6 +39,14 @@ export interface Source {
   url: string | null;
 }
 
+export interface Passage {
+  document_id: number;
+  filename: string;
+  text: string;
+  start: number;
+  end: number;
+}
+
 export interface Usage {
   elapsed_ms: number | null;
   prompt_tokens: number;

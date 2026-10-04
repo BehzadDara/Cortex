@@ -1,8 +1,12 @@
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from functools import lru_cache
 from typing import Any
+from uuid import UUID, uuid5
 
-from langsmith import get_current_run_tree, traceable
+from langsmith import Client, get_current_run_tree, traceable, tracing_context
+from langsmith.utils import LangSmithNotFoundError
 
 from app.config import settings
 
@@ -55,3 +59,38 @@ def record_token_usage(input_tokens: int, output_tokens: int) -> None:
             "total_tokens": input_tokens + output_tokens,
         }
     )
+
+
+@contextmanager
+def conversation_thread(conversation_id: int) -> Iterator[None]:
+    with tracing_context(metadata={"thread_id": str(conversation_id)}):
+        yield
+
+
+@lru_cache
+def feedback_client() -> Client:
+    return Client(
+        api_key=settings.langsmith_api_key, api_url=settings.langsmith_endpoint
+    )
+
+
+def record_feedback(trace_id: str, key: str, score: int | None) -> None:
+    if not settings.langsmith_tracing:
+        return
+    feedback_id = uuid5(UUID(trace_id), key)
+    if score is None:
+        delete_feedback(feedback_id)
+        return
+    try:
+        feedback_client().update_feedback(feedback_id, score=score)
+    except LangSmithNotFoundError:
+        feedback_client().create_feedback(
+            trace_id, key, score=score, feedback_id=feedback_id
+        )
+
+
+def delete_feedback(feedback_id: UUID) -> None:
+    try:
+        feedback_client().delete_feedback(feedback_id)
+    except LangSmithNotFoundError:
+        return

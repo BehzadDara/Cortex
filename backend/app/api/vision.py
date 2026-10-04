@@ -16,6 +16,7 @@ from app.rag.llm import LLMProvider
 from app.rag.prompts import build_image_question_prompt
 from app.rag.vision import VisionProvider
 from app.schemas import ImageAskResponse
+from app.tracing import conversation_thread
 
 router = APIRouter(tags=["vision"])
 
@@ -58,5 +59,6 @@ def ask_image(
         answer,
         attachments=[stored_attachment(data, file.filename, image_store)],
     )
-    summarize_if_due(conversation.id, llm)
+    with conversation_thread(conversation.id):
+        summarize_if_due(conversation.id, llm)
     return ImageAskResponse(conversation_id=conversation.id, answer=answer)

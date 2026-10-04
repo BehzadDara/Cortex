@@ -132,6 +132,7 @@ class Message(Base):
     elapsed_ms: Mapped[int | None]
     prompt_tokens: Mapped[int | None]
     response_tokens: Mapped[int | None]
+    trace_id: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
