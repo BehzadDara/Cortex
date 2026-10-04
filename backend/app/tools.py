@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, timedelta
+from pathlib import PurePosixPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, select
@@ -12,10 +13,16 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Chunk, Collection, Conversation, Document, Image, PromptLog
+from app.rag.code_sandbox import (
+    CodeSandbox,
+    ExecutionResult,
+    SandboxFile,
+    SandboxUnavailableError,
+)
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.file_store import FileStore
 from app.rag.image_generation import ImageGenerator
-from app.rag.images import download_image
+from app.rag.images import download_image, usable_image
 from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks, retrieve_images
@@ -277,6 +284,107 @@ def build_image_tool(image_generator: ImageGenerator, file_store: FileStore) -> 
             "required": ["prompt"],
         },
         run=generate_image,
+    )
+
+
+CODE_STREAM_CHARS = 3000
+
+MODEL_STREAM_CHARS = 1500
+
+IMAGE_FILE_SUFFIXES = {".png", ".jpg", ".jpeg"}
+
+
+def head(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit] + "\n…"
+
+
+def tail(text: str, limit: int) -> str:
+    return text if len(text) <= limit else "…\n" + text[-limit:]
+
+
+def store_sandbox_file(file: SandboxFile, file_store: FileStore) -> dict | None:
+    suffix = PurePosixPath(file.name).suffix.lower()
+    if suffix in IMAGE_FILE_SUFFIXES:
+        image = usable_image(file.data, min_dimension=0)
+        if image is None:
+            return None
+        filename = file_store.save(image.data, image.extension)
+        return {"filename": filename, "name": file.name, "image": True}
+    filename = file_store.save(file.data, suffix.removeprefix("."))
+    return {"filename": filename, "name": file.name, "image": False}
+
+
+def describe_execution(result: ExecutionResult, files: list[dict]) -> str:
+    if result.timed_out:
+        return (
+            f"The code ran past the {settings.code_timeout_seconds}-second "
+            "limit and was stopped. Make it faster or do less work."
+        )
+    parts = [f"Exit code {result.exit_code}."]
+    if result.stdout.strip():
+        parts.append(f"Output:\n{head(result.stdout, MODEL_STREAM_CHARS)}")
+    if result.stderr.strip():
+        parts.append(f"Errors:\n{tail(result.stderr, MODEL_STREAM_CHARS)}")
+    if files:
+        names = ", ".join(file["name"] for file in files)
+        parts.append(f"Files created and shown to the user: {names}")
+    if len(parts) == 1:
+        parts.append("The code printed nothing; print the values you need.")
+    return "\n".join(parts)
+
+
+def build_code_tool(sandbox: CodeSandbox, file_store: FileStore) -> Tool:
+    def run_python(code: str) -> ToolOutput:
+        try:
+            result = sandbox.run(code)
+        except SandboxUnavailableError as error:
+            return ToolOutput(
+                text=(
+                    f"The code sandbox is unavailable: {error}. Tell the user "
+                    "to start Docker and build the cortex-sandbox image."
+                )
+            )
+        stored = [store_sandbox_file(file, file_store) for file in result.files]
+        files = [file for file in stored if file is not None]
+        return ToolOutput(
+            text=describe_execution(result, files),
+            widget=Widget(
+                kind="code_result",
+                data={
+                    "code": code,
+                    "stdout": head(result.stdout, CODE_STREAM_CHARS),
+                    "stderr": tail(result.stderr, CODE_STREAM_CHARS),
+                    "exit_code": result.exit_code,
+                    "timed_out": result.timed_out,
+                    "files": files,
+                },
+            ),
+        )
+
+    return Tool(
+        name="run_python",
+        description=(
+            "Run a Python 3.12 script in an isolated sandbox and return what "
+            "it prints. Use it for data analysis, statistics, simulations, "
+            "multi-step calculations, and plotting charts of data. numpy, "
+            "pandas, and matplotlib are installed; charts drawn with "
+            "matplotlib are shown to the user automatically, and files saved "
+            "to the working directory are offered for download. There is no "
+            "internet access and no access to the user's files, and the "
+            f"script stops after {settings.code_timeout_seconds} seconds. "
+            "Print every value you need to see."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "A complete Python script",
+                }
+            },
+            "required": ["code"],
+        },
+        run=run_python,
     )
 
 
@@ -680,6 +788,8 @@ def build_tools(
     video_search: VideoSearchProvider,
     generated_image_store: FileStore,
     web_image_store: FileStore,
+    code_sandbox: CodeSandbox,
+    sandbox_file_store: FileStore,
 ) -> list[Tool]:
     return [
         Tool(
@@ -721,4 +831,5 @@ def build_tools(
         build_image_tool(image_generator, generated_image_store),
         build_web_image_tool(image_search, web_image_store),
         build_web_video_tool(video_search),
+        build_code_tool(code_sandbox, sandbox_file_store),
     ]

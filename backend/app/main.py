@@ -38,6 +38,8 @@ knowledge_images_dir = Path(settings.knowledge_image_dir)
 knowledge_images_dir.mkdir(parents=True, exist_ok=True)
 chat_images_dir = Path(settings.chat_image_dir)
 chat_images_dir.mkdir(parents=True, exist_ok=True)
+sandbox_files_dir = Path(settings.sandbox_file_dir)
+sandbox_files_dir.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Cortex", lifespan=lifespan)
 app.mount("/images", StaticFiles(directory=images_dir), name="images")
@@ -47,6 +49,9 @@ app.mount(
     name="knowledge_images",
 )
 app.mount("/chat-images", StaticFiles(directory=chat_images_dir), name="chat_images")
+app.mount(
+    "/sandbox-files", StaticFiles(directory=sandbox_files_dir), name="sandbox_files"
+)
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)

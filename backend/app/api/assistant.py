@@ -27,6 +27,7 @@ from app.checkpoints import get_checkpointer
 from app.config import settings
 from app.database import SessionLocal
 from app.dependencies import (
+    get_code_sandbox,
     get_embedding_provider,
     get_fast_llm_provider,
     get_generated_image_store,
@@ -38,6 +39,7 @@ from app.dependencies import (
     get_market_data_provider,
     get_memory_store,
     get_reranker,
+    get_sandbox_file_store,
     get_session,
     get_vector_store,
     get_video_search,
@@ -93,6 +95,8 @@ def build_graph(
         get_video_search(),
         get_generated_image_store(),
         get_knowledge_image_store(),
+        get_code_sandbox(),
+        get_sandbox_file_store(),
     )
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
     search_images = build_knowledge_image_search(

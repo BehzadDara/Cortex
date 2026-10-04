@@ -109,11 +109,13 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
     running: "Searching web videos",
     done: "Searched web videos",
   },
+  run_python: { running: "Running Python", done: "Ran Python" },
 };
 
 const APPROVAL_PROMPTS: Record<string, string> = {
   web_image_search: "Cortex wants to search the web for images of ",
   web_video_search: "Cortex wants to search the web for videos of ",
+  run_python: "Cortex wants to run this Python code in the sandbox",
 };
 
 function approvalPrompt(name: string): string {
@@ -128,8 +130,14 @@ function stepLabel(step: ToolStep): string {
   return step.result === null ? labels.running : labels.done;
 }
 
+function firstCodeLine(code: unknown): string | undefined {
+  if (typeof code !== "string") return undefined;
+  return code.split("\n").find((line) => line.trim() !== "")?.trim();
+}
+
 function stepDetail(step: ToolStep): string {
   const detail =
+    firstCodeLine(step.arguments.code) ??
     step.arguments.query ??
     step.arguments.expression ??
     step.arguments.city ??
@@ -216,6 +224,41 @@ function GlobeIcon() {
       <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
       <path d="M2 12h20" />
     </svg>
+  );
+}
+
+function CodeIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+function ApprovalRequest({ approval }: { approval: Approval }) {
+  const code = approval.arguments.code;
+  if (approval.name === "run_python" && typeof code === "string") {
+    return (
+      <div className="approval-body">
+        <div className="approval-text">
+          <CodeIcon />
+          <span>{approvalPrompt(approval.name)}</span>
+        </div>
+        <pre className="approval-code">
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+  }
+  return (
+    <div className="approval-text">
+      <GlobeIcon />
+      <span>
+        {approvalPrompt(approval.name)}
+        <strong>{String(approval.arguments.query ?? "")}</strong>
+      </span>
+    </div>
   );
 }
 
@@ -322,6 +365,7 @@ const STEP_ICONS: Record<string, ComponentType> = {
   generate_image: ImageIcon,
   web_image_search: ImageIcon,
   web_video_search: VideoIcon,
+  run_python: CodeIcon,
 };
 
 function DownloadIcon() {
@@ -1387,15 +1431,7 @@ export default function ChatView() {
                 )}
                 {message.approval ? (
                   <div className="approval">
-                    <div className="approval-text">
-                      <GlobeIcon />
-                      <span>
-                        {approvalPrompt(message.approval.name)}
-                        <strong>
-                          {String(message.approval.arguments.query ?? "")}
-                        </strong>
-                      </span>
-                    </div>
+                    <ApprovalRequest approval={message.approval} />
                     <div className="approval-actions">
                       <button
                         className="primary"

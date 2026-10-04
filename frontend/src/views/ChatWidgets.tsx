@@ -5,7 +5,7 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { generatedImageUrl, knowledgeImageUrl } from "../api";
+import { generatedImageUrl, knowledgeImageUrl, sandboxFileUrl } from "../api";
 import type { Widget } from "../types";
 
 interface ClockData {
@@ -1027,6 +1027,119 @@ function VideoPlayerCard({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+interface SandboxFileEntry {
+  filename: string;
+  name: string;
+  image: boolean;
+}
+
+interface CodeResultData {
+  code: string;
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  timed_out: boolean;
+  files: SandboxFileEntry[];
+}
+
+function codeStatus(result: CodeResultData): { label: string; ok: boolean } {
+  if (result.timed_out) return { label: "Timed out", ok: false };
+  if (result.exit_code === 0) return { label: "Succeeded", ok: true };
+  return { label: `Failed · exit ${result.exit_code}`, ok: false };
+}
+
+function SandboxImage({ file }: { file: SandboxFileEntry }) {
+  const [failed, setFailed] = useState(false);
+  const url = sandboxFileUrl(file.filename);
+  if (failed) {
+    return <span className="widget-subtle">Chart unavailable · {file.name}</span>;
+  }
+  return (
+    <figure className="code-figure">
+      <a
+        className="image-link"
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Open full-size chart: ${file.name}`}
+      >
+        <img src={url} alt={file.name} loading="lazy" onError={() => setFailed(true)} />
+      </a>
+      <div className="image-footer">
+        <figcaption className="widget-subtle">{file.name}</figcaption>
+        <a
+          className="image-download"
+          href={url}
+          download={file.name}
+          aria-label={`Download ${file.name}`}
+        >
+          <DownloadIcon />
+          Download
+        </a>
+      </div>
+    </figure>
+  );
+}
+
+function SandboxDownload({ file }: { file: SandboxFileEntry }) {
+  return (
+    <a
+      className="image-download code-file"
+      href={sandboxFileUrl(file.filename)}
+      download={file.name}
+      aria-label={`Download ${file.name}`}
+    >
+      <DownloadIcon />
+      {file.name}
+    </a>
+  );
+}
+
+function CodeResultCard({ data }: { data: Record<string, unknown> }) {
+  const result = data as unknown as CodeResultData;
+  const files = result.files ?? [];
+  const images = files.filter((file) => file.image);
+  const downloads = files.filter((file) => !file.image);
+  const status = codeStatus(result);
+
+  return (
+    <div className="widget-card code-card">
+      <div className="code-header">
+        <span className="widget-title">Python</span>
+        <span className={status.ok ? "code-status ok" : "code-status failed"}>
+          {status.label}
+        </span>
+      </div>
+      <details className="code-source">
+        <summary className="widget-subtle">Show code</summary>
+        <pre>
+          <code>{result.code}</code>
+        </pre>
+      </details>
+      {result.stdout.trim() && (
+        <pre className="code-output" aria-label="Output">
+          {result.stdout}
+        </pre>
+      )}
+      {result.stderr.trim() && (
+        <pre className="code-output error" aria-label="Errors">
+          {result.stderr}
+        </pre>
+      )}
+      {images.map((file) => (
+        <SandboxImage key={file.filename} file={file} />
+      ))}
+      {downloads.length > 0 && (
+        <div className="code-files">
+          {downloads.map((file) => (
+            <SandboxDownload key={file.filename} file={file} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const WIDGET_COMPONENTS: Record<
   string,
   ComponentType<{ data: Record<string, unknown> }>
@@ -1039,6 +1152,7 @@ const WIDGET_COMPONENTS: Record<
   image: ImageCard,
   image_gallery: ImageGalleryCard,
   video_player: VideoPlayerCard,
+  code_result: CodeResultCard,
 };
 
 export function WidgetCard({ widget }: { widget: Widget }) {

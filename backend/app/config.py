@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     image_dir: str = str(BACKEND_ROOT / "generated_images")
     knowledge_image_dir: str = str(BACKEND_ROOT / "knowledge_images")
     chat_image_dir: str = str(BACKEND_ROOT / "chat_images")
+    sandbox_file_dir: str = str(BACKEND_ROOT / "sandbox_files")
+    code_sandbox_image: str = "cortex-sandbox"
+    code_timeout_seconds: int = 10
+    code_memory_mb: int = 512
+    code_cpus: float = 1.0
     max_images_per_document: int = 8
     max_image_bytes: int = 8_000_000
     min_image_dimension: int = 128

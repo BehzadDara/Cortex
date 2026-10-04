@@ -178,6 +178,9 @@ export const knowledgeImageUrl = (filename: string) =>
 export const chatImageUrl = (filename: string) =>
   `${BASE}/chat-images/${filename}`;
 
+export const sandboxFileUrl = (filename: string) =>
+  `${BASE}/sandbox-files/${filename}`;
+
 export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);

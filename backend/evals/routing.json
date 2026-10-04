@@ -44,5 +44,12 @@
   { "question": "Show me a video of how to make sushi.", "needs_documents": false },
   { "question": "Find a YouTube video about the James Webb telescope.", "needs_documents": false },
   { "question": "Can I watch a tutorial video on knife sharpening?", "needs_documents": false },
-  { "question": "Now one about ramen.", "previous": "Show me a video of how to make sushi.", "needs_documents": false }
+  { "question": "Now one about ramen.", "previous": "Show me a video of how to make sushi.", "needs_documents": false },
+  { "question": "Simulate rolling two dice 10,000 times and show the distribution.", "needs_documents": false },
+  { "question": "Plot y = x squared from -5 to 5.", "needs_documents": false },
+  { "question": "Run this Python: print(sorted([5, 2, 9]))", "needs_documents": false },
+  { "question": "What's the mean and standard deviation of 4, 8, 15, 16, 23, 42?", "needs_documents": false },
+  { "question": "Now make it a bar chart.", "previous": "Simulate rolling two dice 10,000 times and show the distribution.", "needs_documents": false },
+  { "question": "Plot the monthly numbers from my sales report.", "needs_documents": true },
+  { "question": "Chart the latency figures from my benchmark notes.", "needs_documents": true }
 ]

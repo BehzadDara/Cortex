@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
+from app.rag.code_sandbox import CodeSandbox, DockerCodeSandbox
 from app.rag.embeddings import EmbeddingProvider, OllamaEmbeddingProvider
 from app.rag.file_store import DiskFileStore, FileStore
 from app.rag.image_generation import ImageGenerator, PollinationsImageGenerator
@@ -70,6 +71,16 @@ def get_knowledge_image_store() -> FileStore:
 @lru_cache
 def get_chat_image_store() -> FileStore:
     return DiskFileStore(settings.chat_image_dir)
+
+
+@lru_cache
+def get_sandbox_file_store() -> FileStore:
+    return DiskFileStore(settings.sandbox_file_dir)
+
+
+@lru_cache
+def get_code_sandbox() -> CodeSandbox:
+    return DockerCodeSandbox()
 
 
 @lru_cache
