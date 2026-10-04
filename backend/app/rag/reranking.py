@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from app.config import settings
+from app.tracing import traced
 
 
 class Reranker(Protocol):
@@ -13,6 +14,7 @@ class CrossEncoderReranker:
 
         self.model = CrossEncoder(settings.reranker_model)
 
+    @traced("Rerank")
     def rerank(self, question: str, texts: list[str]) -> list[float]:
         pairs = [(question, text) for text in texts]
         return self.model.predict(pairs).tolist()

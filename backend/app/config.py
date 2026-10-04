@@ -6,7 +6,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=BACKEND_ROOT / ".env")
 
     database_url: str = "postgresql+psycopg://cortex:cortex@localhost:5442/cortex"
     qdrant_url: str = "http://localhost:6333"
@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     llm_response_tokens: int = 4096
     agent_min_relevance: float = -7.0
     web_search_results: int = 5
+    langsmith_tracing: bool = False
+    langsmith_api_key: str = ""
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_project: str = "cortex"
+    langsmith_eval_project: str = "cortex-evals"
 
 
 settings = Settings()

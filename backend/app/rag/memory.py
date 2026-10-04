@@ -15,6 +15,7 @@ from app.config import settings
 from app.rag.embeddings import OllamaEmbeddingProvider
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_memory_prompt, build_supersede_prompt
+from app.tracing import traced
 
 class TaskPrefixedEmbedding(EmbeddingBase):
     def __init__(self, config=None) -> None:
@@ -216,6 +217,7 @@ class DisabledMemoryStore:
         raise LookupError(memory_id)
 
 
+@traced("Recall memories", hidden_inputs=("store",))
 def recall_quietly(store: MemoryStore, query: str) -> list[str]:
     try:
         return [memory.text for memory in store.recall(query)]
@@ -223,6 +225,7 @@ def recall_quietly(store: MemoryStore, query: str) -> list[str]:
         return []
 
 
+@traced("Remember facts", hidden_inputs=("store",))
 def remember_quietly(store: MemoryStore, message: str, source: dict) -> None:
     try:
         store.remember(message, source)

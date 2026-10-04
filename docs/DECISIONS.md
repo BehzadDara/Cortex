@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-10-04 — LangSmith tracing, opt-in
+
+LangSmith is a hosted service, so turning it on sends prompts, retrieved passages and remembered facts off the machine — the opposite of local-first. It is therefore off by default and enabled only by `LANGSMITH_TRACING=true` plus an API key in `backend/.env`; the app sends the live run to the `cortex` project and the eval scripts to `cortex-evals`. LangGraph's built-in tracing alone would show only graph nodes, because Cortex calls Ollama over HTTP rather than through LangChain, so the Ollama calls, retrieval, embedding, reranking, tools and memory recall are wrapped as their own runs, with model name and Ollama's token counts attached. Everything LangSmith-specific lives in `app/tracing.py`. LangGraph copies its per-run checkpoint `thread_id` into trace metadata, which would split every turn into its own LangSmith thread; the run config overrides the metadata `thread_id` with the conversation id, while checkpoints keep the per-run id. `.env` is now resolved from the backend directory rather than the working directory, so the key is found however uvicorn is started. Retrieval eval unchanged: 29/29 hit@5, MRR 1.000, 12/12 rejected.
+
 ## 2026-09-12 — mem0 was embedding memories without nomic's task prefixes
 
 Memory recall returned the top 5 facts with no relevance threshold, documented as deliberate: scores were said to be inseparable because mem0 does not use the query/passage prefixes `nomic-embed-text` was trained with. The first half was right, the conclusion was backwards — the prefixes were the fixable part.

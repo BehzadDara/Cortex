@@ -21,6 +21,9 @@ from app.api import (
 from app.checkpoints import warm_checkpointer
 from app.config import settings
 from app.database import engine
+from app.tracing import enable_tracing
+
+enable_tracing(settings.langsmith_project)
 
 
 @asynccontextmanager

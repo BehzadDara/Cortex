@@ -6,8 +6,41 @@ from app.models import Chunk, Document, Image
 from app.rag.embeddings import EmbeddingProvider
 from app.rag.reranking import Reranker
 from app.rag.vector_store import VectorStore
+from app.tracing import traced
 
 RRF_K = 60
+
+RETRIEVAL_DEPENDENCIES = (
+    "session",
+    "embeddings",
+    "vector_store",
+    "image_vector_store",
+    "reranker",
+)
+
+
+def chunks_as_documents(chunks: list[Chunk]) -> dict:
+    return {
+        "documents": [
+            {
+                "page_content": chunk.content,
+                "metadata": {"source": chunk.document.filename, "chunk_id": chunk.id},
+            }
+            for chunk in chunks
+        ]
+    }
+
+
+def images_as_documents(images: list[Image]) -> dict:
+    return {
+        "documents": [
+            {
+                "page_content": image.caption,
+                "metadata": {"source": image.document.filename, "image": image.filename},
+            }
+            for image in images
+        ]
+    }
 
 
 def keyword_search(
@@ -31,6 +64,12 @@ def reciprocal_rank_fusion(rankings: list[list[int]]) -> list[int]:
     return [chunk_id for chunk_id, _ in ordered]
 
 
+@traced(
+    "Retrieve chunks",
+    run_type="retriever",
+    hidden_inputs=RETRIEVAL_DEPENDENCIES,
+    format_output=chunks_as_documents,
+)
 def retrieve_chunks(
     session: Session,
     question: str,
@@ -71,6 +110,12 @@ def retrieve_chunks(
     return ordered[:limit]
 
 
+@traced(
+    "Retrieve images",
+    run_type="retriever",
+    hidden_inputs=RETRIEVAL_DEPENDENCIES,
+    format_output=images_as_documents,
+)
 def retrieve_images(
     session: Session,
     question: str,

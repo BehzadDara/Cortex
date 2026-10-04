@@ -3,12 +3,15 @@ import time
 from pathlib import Path
 
 from app.assistant_graph import decide_route
+from app.config import settings
 from app.dependencies import get_fast_llm_provider
+from app.tracing import enable_tracing
 
 GOLDEN_PATH = Path(__file__).parent / "routing.json"
 
 
 def main() -> None:
+    enable_tracing(settings.langsmith_eval_project)
     fast_llm = get_fast_llm_provider()
     items = json.loads(GOLDEN_PATH.read_text())
 

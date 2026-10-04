@@ -3,7 +3,7 @@ import operator
 import re
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -28,6 +28,7 @@ from app.rag.web_search import (
     WebSearchProvider,
     WebVideo,
 )
+from app.tracing import traced
 
 
 @dataclass
@@ -59,6 +60,10 @@ def to_definition(tool: Tool) -> dict:
             "parameters": tool.parameters,
         },
     }
+
+
+def traced_tool(tool: Tool) -> Tool:
+    return replace(tool, run=traced(tool.name, run_type="tool")(tool.run))
 
 
 BINARY_OPERATORS = {
@@ -331,7 +336,20 @@ def build_document_search(
     return search_documents
 
 
+def sources_as_documents(sources: list[SourceChunk]) -> dict:
+    return {
+        "documents": [
+            {
+                "page_content": source.content,
+                "metadata": {"source": source.filename, "url": source.url},
+            }
+            for source in sources
+        ]
+    }
+
+
 def build_web_search(web_search: WebSearchProvider):
+    @traced("Web search", run_type="retriever", format_output=sources_as_documents)
     def search_web(query: str) -> list[SourceChunk]:
         try:
             results = web_search.search(query)
@@ -425,6 +443,7 @@ def search_with_retry(provider, query: str):
 def build_web_image_gallery(
     image_search: ImageSearchProvider, file_store: FileStore, reranker: Reranker
 ):
+    @traced("Find web images")
     def find_web_images(query: str) -> list[dict]:
         results = search_with_retry(image_search, query)
         if results and settings.rerank:

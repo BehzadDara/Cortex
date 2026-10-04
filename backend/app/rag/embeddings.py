@@ -3,6 +3,11 @@ from typing import Protocol
 import httpx
 
 from app.config import settings
+from app.tracing import traced
+
+
+def vector_size(vector: list[float]) -> dict:
+    return {"dimensions": len(vector)}
 
 
 class EmbeddingProvider(Protocol):
@@ -15,6 +20,7 @@ class OllamaEmbeddingProvider:
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return self._embed([f"search_document: {text}" for text in texts])
 
+    @traced("Embed query", run_type="embedding", format_output=vector_size)
     def embed_query(self, text: str) -> list[float]:
         return self._embed([f"search_query: {text}"])[0]
 

@@ -7,6 +7,7 @@ import httpx
 
 from app.config import settings
 from app.dependencies import get_fast_llm_provider
+from app.tracing import enable_tracing
 
 GOLDEN_PATH = Path(__file__).parent / "recall.json"
 
@@ -31,6 +32,7 @@ def store_facts(store, facts: list[str]) -> None:
 
 
 def main() -> None:
+    enable_tracing(settings.langsmith_eval_project)
     golden = json.loads(GOLDEN_PATH.read_text())
     collection = isolated_collection()
     from app.rag.memory import Mem0MemoryStore

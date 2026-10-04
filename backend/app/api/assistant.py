@@ -157,6 +157,14 @@ def save_prompt_log(
         session.commit()
 
 
+def run_config(thread_id: str, conversation_id: int) -> dict:
+    return {
+        "configurable": {"thread_id": thread_id},
+        "run_name": "Assistant",
+        "metadata": {"thread_id": str(conversation_id)},
+    }
+
+
 def stream_events(
     graph,
     graph_input,
@@ -172,10 +180,11 @@ def stream_events(
         yield sse_event({"type": "snapshot", **snapshot})
 
     started = time.perf_counter()
-    config = {"configurable": {"thread_id": thread_id}}
     final_state = None
     stream = graph.stream(
-        graph_input, config, stream_mode=["custom", "updates", "values"]
+        graph_input,
+        run_config(thread_id, conversation_id),
+        stream_mode=["custom", "updates", "values"],
     )
     for mode, chunk in stream:
         if mode == "custom":

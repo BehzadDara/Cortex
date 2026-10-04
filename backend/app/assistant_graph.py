@@ -22,6 +22,7 @@ from app.tools import (
     Tool,
     ToolOutput,
     to_definition,
+    traced_tool,
 )
 
 SYSTEM_PROMPT = (
@@ -256,7 +257,7 @@ def build_assistant_graph(
         WEB_SEARCH_DEFINITION,
         *(to_definition(tool) for tool in tools),
     ]
-    tool_map = {tool.name: tool for tool in tools}
+    tool_map = {tool.name: traced_tool(tool) for tool in tools}
     definitions_tokens = estimate_tokens(str(definitions))
 
     def run_search(

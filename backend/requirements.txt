@@ -16,6 +16,7 @@ pypdfium2
 pillow
 ddgs
 langgraph
+langsmith
 langgraph-checkpoint-postgres
 psycopg-pool
 mlx-whisper

@@ -30,6 +30,7 @@ from app.rag.prompts import build_answer_prompt
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks
 from app.rag.vector_store import VectorStore
+from app.tracing import enable_tracing
 
 GOLDEN_PATH = Path(__file__).parent / "golden.json"
 
@@ -232,6 +233,7 @@ def evaluate_assistant(session: Session, items: list[dict]) -> None:
 
 
 def main() -> None:
+    enable_tracing(settings.langsmith_eval_project)
     parser = argparse.ArgumentParser()
     parser.add_argument("--retrieval-only", action="store_true")
     parser.add_argument(
