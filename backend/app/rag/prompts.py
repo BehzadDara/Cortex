@@ -51,13 +51,13 @@ SUMMARY_PROMPT = """Summarize the conversation below concisely. Keep facts, name
 Summary:"""
 
 
-MEMORY_PROMPT = """Extract durable facts about the user from their message. A durable fact is one that is still true next month: their name, where they live or work, their job, the tools and languages they use, their preferences, their health and accessibility needs, and their long-term goals or constraints.
+MEMORY_PROMPT = """Extract durable facts about the user from their message. A durable fact is one that is still true next month: their name, their age, birth date or birthday, where they live or work, their job, the tools and languages they use, their preferences, their health and accessibility needs, and their long-term goals or constraints.
 
-Every fact must name something specific: a name, a place, a job, a tool, a language, a preference, or a condition. Skip anything vague enough to be true of anyone.
+Every fact must name something specific: a name, an age, a date, a place, a job, a tool, a language, a preference, or a condition. Skip anything vague enough to be true of anyone.
 
 Write one fact per line, each a short sentence starting with "The user". Write nothing else. If the message states no durable fact about the user, write exactly: none
 
-Ignore questions, requests, and greetings — including questions the user asks about themselves — and anything that describes the world rather than the user. A question is never a fact, however much it mentions the user.
+Ignore questions, requests, and greetings — including questions the user asks about themselves — and anything that describes the world rather than the user. A question is never a fact, however much it mentions the user. When a message states something about the user and then asks a question, keep the statement and drop the question.
 
 Message: Hi, my name is Behzad and I'm a backend developer.
 Facts:
@@ -91,6 +91,10 @@ none
 Message: What do you remember about me?
 Facts:
 none
+
+Message: I'm vegetarian, what should I cook tonight?
+Facts:
+The user is vegetarian.
 
 Message: I deploy things and I work somewhere in tech.
 Facts:

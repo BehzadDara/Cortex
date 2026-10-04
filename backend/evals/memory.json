@@ -34,5 +34,11 @@
   { "message": "I live in Tehran. What's the weather there?", "expected": ["tehran"] },
   { "message": "I use FastAPI — can you explain dependency injection?", "expected": ["fastapi"] },
   { "message": "I'm Behzad, do you know me?", "expected": ["behzad"] },
-  { "message": "I'm allergic to peanuts, is that in a Snickers?", "expected": ["peanut"] }
+  { "message": "I'm allergic to peanuts, is that in a Snickers?", "expected": ["peanut"] },
+  { "message": "I was born in 1998", "expected": ["1998"] },
+  { "message": "I am 28 years old", "expected": ["28"] },
+  { "message": "My birthday is on March 3rd.", "expected": ["march"] },
+  { "message": "I was born in 1998, what generation does that make me?", "expected": ["1998"] },
+  { "message": "How old am I?", "expected": [] },
+  { "message": "When was Python first released?", "expected": [] }
 ]
