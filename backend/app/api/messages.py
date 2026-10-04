@@ -88,7 +88,7 @@ def run_variant(
     timezone: str | None,
     providers: dict,
 ) -> StreamingResponse:
-    graph = build_graph(session, **providers)
+    graph = build_graph(session, **providers, parent_id=parent_id)
     thread_id = uuid4().hex
     start_run(session, conversation, thread_id, parent_id)
     return StreamingResponse(

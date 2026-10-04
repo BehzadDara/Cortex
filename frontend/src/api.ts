@@ -181,6 +181,9 @@ export const chatImageUrl = (filename: string) =>
 export const sandboxFileUrl = (filename: string) =>
   `${BASE}/sandbox-files/${filename}`;
 
+export const webPageUrl = (pageId: number | string) =>
+  `${BASE}/web-pages/${pageId}`;
+
 export const getStats = () => request<Stats>("/stats");
 
 export const getLogs = (limit = 20) => request<PromptLog[]>(`/logs?limit=${limit}`);

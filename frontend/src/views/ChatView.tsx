@@ -110,6 +110,7 @@ const STEP_LABELS: Record<string, { running: string; done: string }> = {
     done: "Searched web videos",
   },
   run_python: { running: "Running Python", done: "Ran Python" },
+  build_web_page: { running: "Building a web page", done: "Built a web page" },
 };
 
 const APPROVAL_PROMPTS: Record<string, string> = {
@@ -138,6 +139,7 @@ function firstCodeLine(code: unknown): string | undefined {
 function stepDetail(step: ToolStep): string {
   const detail =
     firstCodeLine(step.arguments.code) ??
+    step.arguments.request ??
     step.arguments.query ??
     step.arguments.expression ??
     step.arguments.city ??
@@ -232,6 +234,16 @@ function CodeIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="16 18 22 12 16 6" />
       <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+function LayoutIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M9 21V9" />
     </svg>
   );
 }
@@ -366,6 +378,7 @@ const STEP_ICONS: Record<string, ComponentType> = {
   web_image_search: ImageIcon,
   web_video_search: VideoIcon,
   run_python: CodeIcon,
+  build_web_page: LayoutIcon,
 };
 
 function DownloadIcon() {

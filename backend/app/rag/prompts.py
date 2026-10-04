@@ -147,6 +147,99 @@ Question: {question}
 
 Answer:"""
 
+WEB_PAGE_RULES = """Rules for the page:
+- One complete HTML document, starting with <!DOCTYPE html> and ending with </html>, with a <title>.
+- All CSS in a single <style> element and all JavaScript in a single <script> element.
+- No external resources and no <img> elements: there are no image files, fonts, or scripts to load. Use emoji for icons and pictures and CSS gradients for backgrounds; never draw shapes with hand-written SVG paths.
+- Put the content of every header, section, and footer inside a <div class="container">.
+- Responsive: looks right from 360px phones to wide desktops.
+- Semantic, accessible HTML: headings in order and enough color contrast.
+- Realistic copy that fits the request, never lorem ipsum.
+- Build every signup, contact, or search box with this pattern, adapting the fields and text:
+<form class="signup"><label for="email">Email</label><input id="email" type="email" required placeholder="you@example.com"><button class="btn" type="submit">Subscribe</button></form><p class="form-note" hidden>Thanks, you're on the list!</p>
+<script>document.querySelectorAll("form").forEach((form) => form.addEventListener("submit", (event) => { event.preventDefault(); form.hidden = true; form.nextElementSibling.hidden = false; }));</script>
+Output only the HTML document, with no explanation before or after it."""
+
+WEB_PAGE_STARTER = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page title</title>
+<style>
+:root { --bg: #faf7f2; --surface: #ffffff; --text: #2b2118; --muted: #6b5d50; --primary: #8b5e3c; --on-primary: #ffffff; --radius: 16px; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+.site-header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid rgb(0 0 0 / .06); }
+.site-header .container { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+.brand { font-weight: 800; font-size: 1.25rem; color: var(--text); text-decoration: none; }
+.nav { display: flex; gap: 24px; }
+.nav a { color: var(--muted); text-decoration: none; font-weight: 500; }
+.nav a:hover { color: var(--primary); }
+.hero { padding: 120px 0 96px; text-align: center; background: linear-gradient(160deg, color-mix(in srgb, var(--primary) 18%, var(--bg)), var(--bg)); }
+.hero .emoji { font-size: 4rem; }
+h1 { font-size: clamp(2.4rem, 6vw, 4rem); line-height: 1.1; margin: 16px 0; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 620px; margin: 0 auto 32px; }
+section { padding: 80px 0; }
+h2 { font-size: 2rem; margin-bottom: 32px; text-align: center; }
+.btn { display: inline-block; padding: 14px 28px; border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgb(0 0 0 / .15); }
+.grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card { background: var(--surface); border-radius: var(--radius); padding: 28px; box-shadow: 0 10px 30px rgb(0 0 0 / .06); }
+.card .emoji { font-size: 2.4rem; }
+.card h3 { margin: 12px 0 6px; }
+.muted { color: var(--muted); }
+form { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+input, textarea, select { font: inherit; padding: 12px 16px; border: 1px solid #d6cfc7; border-radius: 12px; min-width: 260px; }
+.site-footer { padding: 40px 0; text-align: center; color: var(--muted); border-top: 1px solid rgb(0 0 0 / .06); }
+@media (max-width: 640px) { .nav { display: none; } section { padding: 56px 0; } }
+</style>
+</head>
+<body>
+<header class="site-header"><div class="container"><a class="brand" href="#">Brand</a><nav class="nav"><a href="#first">First</a><a href="#second">Second</a></nav></div></header>
+<main>
+<section class="hero"><div class="container"><div class="emoji">✨</div><h1>Headline</h1><p class="lead">One supporting sentence.</p><a class="btn" href="#first">Call to action</a></div></section>
+<section id="first"><div class="container"><h2>Section title</h2><div class="grid"><article class="card"><div class="emoji">⭐</div><h3>Item</h3><p class="muted">Short description.</p></article></div></div></section>
+</main>
+<footer class="site-footer"><div class="container"><p>© Brand</p></div></footer>
+<script></script>
+</body>
+</html>"""
+
+WEB_PAGE_PROMPT = """You are an expert front-end developer. Write a single-file web page for this request.
+
+Request: {request}
+
+Build it on the starter page below: keep its structure and classes, recolor the :root variables to fit the request, replace every placeholder with real content, add one section for each thing the request asks for, and extend the CSS for anything new.
+
+Starter page:
+{starter}
+
+{rules}"""
+
+WEB_PAGE_EDIT_PROMPT = """You are an expert front-end developer. Here is the current version of a web page you wrote earlier.
+
+Current page:
+{html}
+
+{rules}
+
+Change requested by the user: {request}
+
+Apply this change to the page above and output the complete updated document. The change must be clearly visible in the result: returning the page unchanged is wrong. Keep the parts the change does not touch."""
+
+
+def build_web_page_prompt(request: str, previous_html: str | None = None) -> str:
+    if previous_html is None:
+        return WEB_PAGE_PROMPT.format(
+            request=request, starter=WEB_PAGE_STARTER, rules=WEB_PAGE_RULES
+        )
+    return WEB_PAGE_EDIT_PROMPT.format(
+        request=request, html=previous_html, rules=WEB_PAGE_RULES
+    )
+
+
 def build_title_prompt(question: str) -> str:
     return TITLE_PROMPT.format(question=question)
 

@@ -38,6 +38,7 @@ from app.dependencies import (
     get_llm_provider,
     get_market_data_provider,
     get_memory_store,
+    get_page_writer,
     get_reranker,
     get_sandbox_file_store,
     get_session,
@@ -85,6 +86,7 @@ def build_graph(
     weather: WeatherProvider,
     market_data: MarketDataProvider,
     image_generator: ImageGenerator,
+    parent_id: int | None = None,
 ):
     tools = build_tools(
         session,
@@ -97,6 +99,8 @@ def build_graph(
         get_knowledge_image_store(),
         get_code_sandbox(),
         get_sandbox_file_store(),
+        get_page_writer(),
+        parent_id,
     )
     search_documents = build_document_search(session, embeddings, vector_store, reranker)
     search_images = build_knowledge_image_search(
@@ -298,6 +302,7 @@ def assistant(
         weather,
         market_data,
         image_generator,
+        parent_id=parent_id,
     )
     thread_id = uuid4().hex
     start_run(session, conversation, thread_id, parent_id)
@@ -351,6 +356,7 @@ def continue_run(
         weather,
         market_data,
         image_generator,
+        parent_id=conversation.active_parent_id,
     )
     thread_id = conversation.active_thread
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
@@ -421,6 +427,7 @@ def resume(
         weather,
         market_data,
         image_generator,
+        parent_id=conversation.active_parent_id,
     )
     return StreamingResponse(
         stream_events(

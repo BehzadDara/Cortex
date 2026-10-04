@@ -9,6 +9,7 @@ Local-first AI knowledge assistant. A learning project that starts as minimal RA
 - **Everything replaceable is behind an abstraction.** LLM, embeddings, vector store, parsers — business logic depends on interfaces, never on Ollama, Qdrant, or any concrete provider directly. Swapping a provider must touch one file.
 - **Keep it simple.** No premature infrastructure, no speculative features, no config for problems we don't have yet. Add a component only when something actually uses it.
 - **One phase at a time.** Each phase ends runnable and demoable before the next begins.
+- **Design frontend with UI/UX Pro Max.** Any change to how the frontend looks or behaves (new views, components, styling, layout, interaction) first reads and follows the `ui-ux-pro-max` skill (`~/.claude/skills/ui-ux-pro-max/SKILL.md`): accessibility, touch targets, contrast, responsive layout, and consistency with the existing design tokens in `frontend/src/index.css`.
 - **Measure retrieval changes.** Once the eval set exists, any change to chunking, search, or ranking is judged by it — not by eyeballing.
 
 ## Structure

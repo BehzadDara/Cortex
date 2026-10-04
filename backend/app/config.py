@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:4b"
     fast_llm_model: str = "gemma3:4b"
     vision_model: str = "gemma3:4b"
+    page_llm_model: str = "gemma3:4b"
+    page_max_tokens: int = 8000
     image_size: int = 768
     image_dir: str = str(BACKEND_ROOT / "generated_images")
     knowledge_image_dir: str = str(BACKEND_ROOT / "knowledge_images")

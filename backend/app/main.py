@@ -17,6 +17,7 @@ from app.api import (
     stats,
     vision,
     voice,
+    web_pages,
 )
 from app.checkpoints import warm_checkpointer
 from app.config import settings
@@ -62,6 +63,7 @@ app.include_router(vision.router)
 app.include_router(voice.router)
 app.include_router(stats.router)
 app.include_router(jobs.router)
+app.include_router(web_pages.router)
 
 
 def database_status() -> str:

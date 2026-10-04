@@ -5,7 +5,12 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { generatedImageUrl, knowledgeImageUrl, sandboxFileUrl } from "../api";
+import {
+  generatedImageUrl,
+  knowledgeImageUrl,
+  sandboxFileUrl,
+  webPageUrl,
+} from "../api";
 import type { Widget } from "../types";
 
 interface ClockData {
@@ -1140,6 +1145,43 @@ function CodeResultCard({ data }: { data: Record<string, unknown> }) {
   );
 }
 
+interface WebPageData {
+  page_id: number;
+  title: string;
+  version: number;
+}
+
+export const PAGE_SANDBOX = "allow-scripts allow-forms allow-modals";
+
+function WebPageCard({ data }: { data: Record<string, unknown> }) {
+  const page = data as unknown as WebPageData;
+
+  return (
+    <div className="widget-card page-card">
+      <div className="page-header">
+        <span className="widget-title">{page.title}</span>
+        <span className="widget-subtle">Version {page.version}</span>
+      </div>
+      <iframe
+        className="page-frame"
+        src={webPageUrl(page.page_id)}
+        title={`Preview: ${page.title}`}
+        sandbox={PAGE_SANDBOX}
+        loading="lazy"
+      />
+      <a
+        className="image-download"
+        href={`/preview/${page.page_id}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        <ExternalLinkIcon />
+        Open full page
+      </a>
+    </div>
+  );
+}
+
 const WIDGET_COMPONENTS: Record<
   string,
   ComponentType<{ data: Record<string, unknown> }>
@@ -1153,6 +1195,7 @@ const WIDGET_COMPONENTS: Record<
   image_gallery: ImageGalleryCard,
   video_player: VideoPlayerCard,
   code_result: CodeResultCard,
+  web_page: WebPageCard,
 };
 
 export function WidgetCard({ widget }: { widget: Widget }) {

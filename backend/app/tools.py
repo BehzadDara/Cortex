@@ -12,7 +12,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Chunk, Collection, Conversation, Document, Image, PromptLog
+from app.models import (
+    Chunk,
+    Collection,
+    Conversation,
+    Document,
+    Image,
+    PromptLog,
+    WebPage,
+)
 from app.rag.code_sandbox import (
     CodeSandbox,
     ExecutionResult,
@@ -23,11 +31,19 @@ from app.rag.embeddings import EmbeddingProvider
 from app.rag.file_store import FileStore
 from app.rag.image_generation import ImageGenerator
 from app.rag.images import download_image, usable_image
+from app.rag.llm import LLMProvider
 from app.rag.market_data import MarketDataProvider
 from app.rag.reranking import Reranker
 from app.rag.retrieval import retrieve_chunks, retrieve_images
 from app.rag.vector_store import VectorStore
 from app.rag.weather import WeatherProvider
+from app.rag.web_pages import (
+    WEB_PAGE_WIDGET,
+    page_on_path,
+    same_document,
+    save_page,
+    write_page,
+)
 from app.rag.web_search import (
     ImageSearchProvider,
     VideoSearchProvider,
@@ -385,6 +401,72 @@ def build_code_tool(sandbox: CodeSandbox, file_store: FileStore) -> Tool:
             "required": ["code"],
         },
         run=run_python,
+    )
+
+
+def build_web_page_tool(
+    session: Session, llm: LLMProvider, parent_id: int | None
+) -> Tool:
+    built: list[WebPage] = []
+
+    def current_page() -> WebPage | None:
+        return built[-1] if built else page_on_path(session, parent_id)
+
+    def build_web_page(request: str) -> ToolOutput:
+        previous = current_page()
+        document = write_page(llm, request, previous)
+        if document is None:
+            return ToolOutput(
+                text="The page could not be built: the writer returned no HTML document."
+            )
+        if previous is not None and same_document(document, previous.html):
+            return ToolOutput(
+                text=(
+                    "The writer returned the page unchanged, so the change was "
+                    "not applied. Tell the user it did not take effect."
+                )
+            )
+        page = save_page(session, request, document, previous)
+        built.append(page)
+        action = "Updated" if previous else "Built"
+        return ToolOutput(
+            text=(
+                f"{action} the web page '{page.title}' (version {page.version}). "
+                "The interface already shows it in a preview card with its own "
+                "open button, so do not write any link or URL to it."
+            ),
+            widget=Widget(
+                kind=WEB_PAGE_WIDGET,
+                data={"page_id": page.id, "title": page.title, "version": page.version},
+            ),
+        )
+
+    return Tool(
+        name="build_web_page",
+        description=(
+            "Build a complete web page — a landing page, website, portfolio, "
+            "form, or UI mockup — and show it to the user in a live preview. "
+            "Also use it to change the page built earlier in this "
+            "conversation: the current page is edited automatically. Each "
+            "call applies one change, so make one call per change. A "
+            "dedicated writer produces the HTML, so describe what to build or "
+            "change in plain words, never pass code."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "string",
+                    "description": (
+                        "Everything the user asked for in plain words: purpose, "
+                        "sections, content, colors, and style — or, for a change, "
+                        "exactly one thing to change"
+                    ),
+                }
+            },
+            "required": ["request"],
+        },
+        run=build_web_page,
     )
 
 
@@ -790,6 +872,8 @@ def build_tools(
     web_image_store: FileStore,
     code_sandbox: CodeSandbox,
     sandbox_file_store: FileStore,
+    page_writer: LLMProvider,
+    parent_id: int | None,
 ) -> list[Tool]:
     return [
         Tool(
@@ -832,4 +916,5 @@ def build_tools(
         build_web_image_tool(image_search, web_image_store),
         build_web_video_tool(video_search),
         build_code_tool(code_sandbox, sandbox_file_store),
+        build_web_page_tool(session, page_writer, parent_id),
     ]

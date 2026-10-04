@@ -49,6 +49,15 @@ def get_fast_llm_provider() -> LLMProvider:
 
 
 @lru_cache
+def get_page_writer() -> LLMProvider:
+    return OllamaLLMProvider(
+        model=settings.page_llm_model,
+        think=False,
+        max_tokens=settings.page_max_tokens,
+    )
+
+
+@lru_cache
 def get_vector_store() -> VectorStore:
     return QdrantVectorStore()
 

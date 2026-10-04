@@ -51,5 +51,10 @@
   { "question": "What's the mean and standard deviation of 4, 8, 15, 16, 23, 42?", "needs_documents": false },
   { "question": "Now make it a bar chart.", "previous": "Simulate rolling two dice 10,000 times and show the distribution.", "needs_documents": false },
   { "question": "Plot the monthly numbers from my sales report.", "needs_documents": true },
-  { "question": "Chart the latency figures from my benchmark notes.", "needs_documents": true }
+  { "question": "Chart the latency figures from my benchmark notes.", "needs_documents": true },
+  { "question": "Build me a landing page for a coffee shop.", "needs_documents": false },
+  { "question": "Design a portfolio website for a freelance photographer.", "needs_documents": false },
+  { "question": "Can you make a signup page with a dark theme?", "needs_documents": false },
+  { "question": "Make the header darker and add a pricing section.", "previous": "Build me a landing page for a coffee shop.", "needs_documents": false },
+  { "question": "Build a landing page for the product described in my notes.", "needs_documents": true }
 ]

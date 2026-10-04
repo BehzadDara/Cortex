@@ -142,6 +142,22 @@ class Message(Base):
     )
 
 
+class WebPage(Base):
+    __tablename__ = "web_pages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("web_pages.id", ondelete="SET NULL")
+    )
+    version: Mapped[int]
+    title: Mapped[str]
+    request: Mapped[str] = mapped_column(Text)
+    html: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class PromptLog(Base):
     __tablename__ = "prompt_logs"
 

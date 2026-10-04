@@ -46,15 +46,23 @@ def joined_text(tokens: list[str]) -> str:
 
 
 class OllamaLLMProvider:
-    def __init__(self, model: str | None = None, think: bool = True) -> None:
+    def __init__(
+        self,
+        model: str | None = None,
+        think: bool = True,
+        max_tokens: int | None = None,
+    ) -> None:
         self.model = model or settings.llm_model
         self.think = think
+        self.max_tokens = max_tokens
 
     def base_request(self) -> dict:
         request = {
             "model": self.model,
             "options": {"num_ctx": settings.llm_num_ctx},
         }
+        if self.max_tokens is not None:
+            request["options"]["num_predict"] = self.max_tokens
         if self.think:
             request["think"] = True
         return request
