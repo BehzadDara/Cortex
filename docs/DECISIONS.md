@@ -2,6 +2,10 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-10-05 — Morning digest lives in n8n
+
+The daily summary is an n8n workflow, not a backend job. `GET /stats` and `GET /logs` already exist, and the assistant loop stays in LangGraph. n8n 2.41.7 runs beside Postgres and Qdrant, calls the API on the host at 8:00 Asia/Tehran, and emails document count, likes, dislikes, average latency, and the last day's questions through Gmail SMTP. The workflow stays unpublished until an app password is saved as an n8n SMTP credential.
+
 ## 2026-10-04 — Web pages as single HTML files in a sandboxed iframe
 
 A full React project per request would need a bundler, a dev server, and a port per page, so `build_web_page` produces one self-contained HTML file instead. The chat model only passes a plain-language request; a separate writer (gemma3:4b, thinking off, 8,000-token cap) writes the HTML, which keeps the page out of the chat context. Qwen3 with thinking wrote good pages in 253 s, and without thinking it ran past the cap, while gemma takes 40 to 70 s. Gemma's first pages were unstyled and used broken SVG and remote images, so it now builds on a starter page with a ready palette and layout. Remote resources are stripped after generation. Pages are immutable versions, and an edit finds the current page by walking the conversation's branch back to the last page card. An edit that comes back unchanged is reported as a failure, so the model can't claim it worked. Putting the requested change last in the edit prompt made edits apply reliably. Combined changes ("dark theme and testimonials") still applied only one change, so the model is told to make one call per change. Pages are served with a CSP `sandbox` header and an iframe without `allow-same-origin`, so a page's script can never reach the app's origin. A route-prompt clause to keep page requests off document search broke three other routing cases, so it was reverted. As a result, 3 of 58 routing cases now run a needless search. Measured: `evals/web_pages.py` builds a self-contained page and applies 4/4 single edits.

@@ -1,0 +1,180 @@
+{
+  "name": "Cortex morning digest",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Daily at 8:00\nAsia/Tehran. Cortex must be running on port 8100.\n\n1. On **Send to Gmail**, create an SMTP credential: host `smtp.gmail.com`, port `465`, SSL/TLS on. User is your Gmail address. Password is a Google app password, not your login password.\n2. Put that same Gmail address in **From Email** and **To Email**.\n3. Publish the workflow. Use **Execute workflow** to send one now.\n\nStats are all-time totals. The questions are from the last 24 hours.",
+        "height": 300,
+        "width": 380,
+        "color": 4
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "How to turn this on",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-40, -20]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "b7c1e2a0-4f3d-4a1b-9c8e-111111111111",
+      "name": "Every day at 8:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [400, 260]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8100/stats",
+        "options": {}
+      },
+      "id": "c8d2f3b1-5a4e-4b2c-8d9f-222222222222",
+      "name": "Get stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [680, 160]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8100/logs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d9e3a4c2-6b5f-4c3d-9e0a-333333333333",
+      "name": "Get logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [680, 380],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "e0f4b5d3-7c60-4d4e-af1b-444444444444",
+      "name": "Wait for both",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [960, 260]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const stats = $('Get stats').first().json;\nconst cutoff = Date.now() - 24 * 60 * 60 * 1000;\nconst recent = $('Get logs')\n  .all()\n  .map((item) => item.json)\n  .filter((entry) => entry.question && new Date(entry.created_at).getTime() >= cutoff)\n  .slice(0, 5);\n\nconst latency =\n  stats.average_latency_ms == null\n    ? 'n/a'\n    : `${Math.round(stats.average_latency_ms)} ms`;\n\nconst questions = recent\n  .map((entry) => {\n    const question = String(entry.question).replace(/\\s+/g, ' ').slice(0, 90);\n    return `• ${question} (${entry.latency_ms} ms)`;\n  })\n  .join('\\n');\n\nconst message = [\n  'Cortex morning digest',\n  '',\n  `Documents: ${stats.documents}`,\n  `Likes: ${stats.likes}`,\n  `Dislikes: ${stats.dislikes}`,\n  `Average latency: ${latency}`,\n  '',\n  questions || 'No questions in the last 24 hours.',\n].join('\\n');\n\nreturn [{ json: { message } }];"
+      },
+      "id": "f1a5c6e4-8d71-4e5f-b02c-555555555555",
+      "name": "Format digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 260]
+    },
+    {
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "",
+        "toEmail": "",
+        "subject": "Cortex morning digest",
+        "emailFormat": "text",
+        "text": "={{ $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a2b6d7f5-9e82-4f60-c13d-666666666666",
+      "name": "Send to Gmail",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1480, 260]
+    }
+  ],
+  "connections": {
+    "Every day at 8:00": {
+      "main": [
+        [
+          {
+            "node": "Get stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get stats": {
+      "main": [
+        [
+          {
+            "node": "Wait for both",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get logs": {
+      "main": [
+        [
+          {
+            "node": "Wait for both",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Wait for both": {
+      "main": [
+        [
+          {
+            "node": "Format digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format digest": {
+      "main": [
+        [
+          {
+            "node": "Send to Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tehran"
+  },
+  "pinData": {},
+  "active": false
+}

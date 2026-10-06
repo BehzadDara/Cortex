@@ -19,6 +19,20 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  n8n:
+    image: n8nio/n8n:2.41.7
+    ports:
+      - "5678:5678"
+    environment:
+      GENERIC_TIMEZONE: Asia/Tehran
+      TZ: Asia/Tehran
+      N8N_RUNNERS_ENABLED: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
 volumes:
   postgres_data:
   qdrant_data:
+  n8n_data:

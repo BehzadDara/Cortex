@@ -1,10 +1,10 @@
 ---
-description: Start the full Cortex stack (Docker containers, Ollama, backend, frontend) and verify everything is up
+description: Start the full Cortex stack (Docker containers, n8n, Ollama, backend, frontend) and verify everything is up
 ---
 
 Start the full Cortex stack in this order. Do not skip the verification at the end.
 
-## 1. Docker containers (Postgres + Qdrant)
+## 1. Docker containers (Postgres + Qdrant + n8n)
 
 ```bash
 docker compose -f /Users/azki/Desktop/Projects/Mine/Cortex/docker/docker-compose.yml up -d
@@ -52,6 +52,7 @@ cd /Users/azki/Desktop/Projects/Mine/Cortex/frontend && npm run dev 2>&1 | tee /
 Run the checks in a **separate** foreground call after both tasks have started, polling up to ~30s:
 
 - `curl -s http://localhost:8100/health` must return `{"database":"up","qdrant":"up","ollama":"up"}` — all three up.
+- `curl -s -m 3 http://localhost:5678/healthz` must return `{"status":"ok"}`. n8n can take longer than Postgres and Qdrant; keep polling it with the other checks.
 - `curl -s http://localhost:5100` must return HTML containing `<title>Cortex</title>`.
 
 Then confirm the servers outlived the commands that started them — wait 5 seconds and check both ports are still listening:
@@ -64,4 +65,4 @@ Both 8100 (Python) and 5100 (node) must appear. If either is missing, the server
 
 If any check fails, read the relevant log (`/tmp/cortex-backend.log`, `/tmp/cortex-frontend.log`, `docker ps`) and fix the problem before reporting.
 
-Finish by reporting the status of each component and the URL http://localhost:5100. Vite listens on IPv6 loopback only, so `localhost` works and `127.0.0.1` does not.
+Finish by reporting the status of each component, the app URL http://localhost:5100, and n8n at http://localhost:5678. Vite listens on IPv6 loopback only, so `localhost` works and `127.0.0.1` does not.
