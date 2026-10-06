@@ -3,9 +3,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Daily at 8:00\nAsia/Tehran. Cortex must be running on port 8100.\n\n1. On **Send to Gmail**, create an SMTP credential: host `smtp.gmail.com`, port `465`, SSL/TLS on. User is your Gmail address. Password is a Google app password, not your login password.\n2. Put that same Gmail address in **From Email** and **To Email**.\n3. Publish the workflow. Use **Execute workflow** to send one now.\n\nStats are all-time totals. The questions are from the last 24 hours.",
-        "height": 300,
-        "width": 380,
+        "content": "## Daily at 8:00\nAsia/Tehran. Cortex must be running on port 8100.\n\n1. On **Send to Gmail**, create an SMTP credential: host `smtp.gmail.com`, port `465`, SSL/TLS on. User is your Gmail address. Password is a Google app password, not your login password.\n2. Put that same Gmail address in **From Email** and **To Email**.\n3. On **Count landing pages**, create a Postgres credential: host `postgres`, port `5432`, database `cortex`, user `cortex`, SSL off. That is the Compose service, so the port is 5432, not 5442.\n4. Publish the workflow. Use **Execute workflow** to send one now.\n\nStats and landing pages are all-time totals. Landing pages counts conversations that created a page. Later edits of that page stay in the same conversation and are not counted again. The questions are from the last 24 hours.",
+        "height": 420,
+        "width": 420,
         "color": 4
       },
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -81,13 +81,32 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const stats = $('Get stats').first().json;\nconst cutoff = Date.now() - 24 * 60 * 60 * 1000;\nconst recent = $('Get logs')\n  .all()\n  .map((item) => item.json)\n  .filter((entry) => entry.question && new Date(entry.created_at).getTime() >= cutoff)\n  .slice(0, 5);\n\nconst latency =\n  stats.average_latency_ms == null\n    ? 'n/a'\n    : `${Math.round(stats.average_latency_ms)} ms`;\n\nconst questions = recent\n  .map((entry) => {\n    const question = String(entry.question).replace(/\\s+/g, ' ').slice(0, 90);\n    return `• ${question} (${entry.latency_ms} ms)`;\n  })\n  .join('\\n');\n\nconst message = [\n  'Cortex morning digest',\n  '',\n  `Documents: ${stats.documents}`,\n  `Likes: ${stats.likes}`,\n  `Dislikes: ${stats.dislikes}`,\n  `Average latency: ${latency}`,\n  '',\n  questions || 'No questions in the last 24 hours.',\n].join('\\n');\n\nreturn [{ json: { message } }];"
+        "jsCode": "const stats = $('Get stats').first().json;\nconst cutoff = Date.now() - 24 * 60 * 60 * 1000;\nconst recent = $('Get logs')\n  .all()\n  .map((item) => item.json)\n  .filter((entry) => entry.question && new Date(entry.created_at).getTime() >= cutoff)\n  .slice(0, 5);\n\nconst latency =\n  stats.average_latency_ms == null\n    ? 'n/a'\n    : `${Math.round(stats.average_latency_ms)} ms`;\n\nconst landingPages = Number(\n  $('Count landing pages').first().json.landing_pages ?? 0,\n);\n\nconst questions = recent\n  .map((entry) => {\n    const question = String(entry.question).replace(/\\s+/g, ' ').slice(0, 90);\n    return `• ${question} (${entry.latency_ms} ms)`;\n  })\n  .join('\\n');\n\nconst message = [\n  'Cortex morning digest',\n  '',\n  `Documents: ${stats.documents}`,\n  `Landing pages: ${landingPages}`,\n  `Likes: ${stats.likes}`,\n  `Dislikes: ${stats.dislikes}`,\n  `Average latency: ${latency}`,\n  '',\n  questions || 'No questions in the last 24 hours.',\n].join('\\n');\n\nreturn [{ json: { message } }];"
       },
       "id": "f1a5c6e4-8d71-4e5f-b02c-555555555555",
       "name": "Format digest",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1220, 260]
+      "position": [1480, 260]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(DISTINCT conversation_id)::int AS landing_pages\nFROM (\n  SELECT conversation_id, widgets\n  FROM messages\n  WHERE jsonb_typeof(widgets) = 'array'\n) AS page_messages\nCROSS JOIN LATERAL jsonb_array_elements(page_messages.widgets) AS widget\nWHERE widget->>'kind' = 'web_page'\n  AND widget->'data'->>'version' = '1'",
+        "options": {}
+      },
+      "id": "b3c8d9e7-1a04-4182-e35f-777777777777",
+      "name": "Count landing pages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [1220, 260],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "CrtxPgCount00001",
+          "name": "Cortex Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -106,7 +125,7 @@
       "name": "Send to Gmail",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [1480, 260]
+      "position": [1740, 260]
     }
   ],
   "connections": {
@@ -149,6 +168,17 @@
       ]
     },
     "Wait for both": {
+      "main": [
+        [
+          {
+            "node": "Count landing pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count landing pages": {
       "main": [
         [
           {
