@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     knowledge_image_dir: str = str(BACKEND_ROOT / "knowledge_images")
     chat_image_dir: str = str(BACKEND_ROOT / "chat_images")
     sandbox_file_dir: str = str(BACKEND_ROOT / "sandbox_files")
+    overview_audio_dir: str = str(BACKEND_ROOT / "overview_audio")
     code_sandbox_image: str = "cortex-sandbox"
     code_timeout_seconds: int = 10
     code_memory_mb: int = 512
@@ -60,6 +61,13 @@ class Settings(BaseSettings):
     )
     tts_voice: str = "af_heart"
     tts_speed: float = 1.0
+    overview_llm_model: str = "qwen3:4b-instruct"
+    overview_temperature: float = 0.7
+    overview_max_documents: int = 8
+    overview_windows_per_document: int = 2
+    overview_window_chars: int = 6000
+    overview_passages_per_segment: int = 5
+    overview_host_voices: dict[str, str] = {"Ava": "af_heart", "Michael": "am_michael"}
     memory_recent_messages: int = 6
     memory_summary_threshold: int = 4
     user_memory_enabled: bool = True

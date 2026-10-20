@@ -213,3 +213,55 @@ class MemoryResponse(BaseModel):
     id: str
     text: str
     created_at: str | None
+
+
+class AudioOverviewCreate(BaseModel):
+    collection_id: int
+    length: Literal["short", "long"] = "short"
+    focus: str | None = Field(default=None, max_length=300)
+
+
+class AudioOverviewSegment(BaseModel):
+    title: str
+    focus: str
+    start_ms: int
+
+
+class AudioOverviewLine(BaseModel):
+    segment: int
+    speaker: str
+    text: str
+    source: int | None
+    start_ms: int
+    end_ms: int
+
+
+class AudioOverviewSource(BaseModel):
+    id: int
+    filename: str
+    content: str
+    url: str | None = None
+
+
+class AudioOverviewSummary(BaseModel):
+    id: int
+    collection_id: int | None
+    collection_name: str | None
+    length: str
+    focus: str | None
+    title: str | None
+    status: str
+    stage: str | None
+    progress: float
+    detail: str | None
+    audio_filename: str | None
+    duration_ms: int | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class AudioOverviewDetail(AudioOverviewSummary):
+    hosts: list[str]
+    segments: list[AudioOverviewSegment]
+    lines: list[AudioOverviewLine]
+    sources: list[AudioOverviewSource]

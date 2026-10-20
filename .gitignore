@@ -16,6 +16,7 @@ backend/generated_images/
 backend/knowledge_images/
 backend/chat_images/
 backend/sandbox_files/
+backend/overview_audio/
 
 # Voice model weights
 backend/voice_models/

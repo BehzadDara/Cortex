@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from app.api import (
     assistant,
+    audio_overviews,
     collections,
     conversations,
     documents,
@@ -19,6 +20,7 @@ from app.api import (
     voice,
     web_pages,
 )
+from app.audio_overviews import fail_interrupted_overviews
 from app.checkpoints import warm_checkpointer
 from app.config import settings
 from app.database import engine
@@ -30,6 +32,7 @@ enable_tracing(settings.langsmith_project)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     warm_checkpointer()
+    fail_interrupted_overviews()
     yield
 
 
@@ -41,6 +44,8 @@ chat_images_dir = Path(settings.chat_image_dir)
 chat_images_dir.mkdir(parents=True, exist_ok=True)
 sandbox_files_dir = Path(settings.sandbox_file_dir)
 sandbox_files_dir.mkdir(parents=True, exist_ok=True)
+overview_audio_dir = Path(settings.overview_audio_dir)
+overview_audio_dir.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Cortex", lifespan=lifespan)
 app.mount("/images", StaticFiles(directory=images_dir), name="images")
@@ -53,6 +58,9 @@ app.mount("/chat-images", StaticFiles(directory=chat_images_dir), name="chat_ima
 app.mount(
     "/sandbox-files", StaticFiles(directory=sandbox_files_dir), name="sandbox_files"
 )
+app.mount(
+    "/overview-audio", StaticFiles(directory=overview_audio_dir), name="overview_audio"
+)
 app.include_router(collections.router)
 app.include_router(documents.router)
 app.include_router(conversations.router)
@@ -64,6 +72,7 @@ app.include_router(voice.router)
 app.include_router(stats.router)
 app.include_router(jobs.router)
 app.include_router(web_pages.router)
+app.include_router(audio_overviews.router)
 
 
 def database_status() -> str:

@@ -281,3 +281,117 @@ def build_memory_prompt(message: str) -> str:
 
 def build_supersede_prompt(old: str, new: str) -> str:
     return SUPERSEDE_PROMPT.format(old=old, new=new)
+
+
+OVERVIEW_SUMMARY_PROMPT = """Summarize this part of a document for the writers of a podcast episode about it. Write 4 to 8 short bullet points covering its main ideas, its most interesting specifics (names, numbers, examples, results), and anything surprising. Use only what the text says. Output only the bullet points.
+
+Document: {filename}
+
+{text}
+
+Bullet points:"""
+
+OVERVIEW_OUTLINE_PROMPT = """You are planning one episode of a podcast in which two hosts, {curious_host} and {expert_host}, talk about the listener's own documents. Here are summaries of those documents.
+
+{summaries}
+
+{focus_section}Plan exactly {segment_count} segments for an episode of about {minutes} minutes:
+- Segment 1 is a short intro that opens with the single most interesting idea as a hook and says what the episode will cover.
+- The segments in between each explore one key idea from the documents, in an order where each builds on the one before. If the documents contain a surprising or counterintuitive fact, give it a segment of its own.
+- The last segment is a wrap-up with the main takeaways.
+
+For each segment give a title of 2 to 6 words, a one-sentence focus saying what the hosts discuss, and a search query of 4 to 10 words that would find the passages this segment needs in the documents.
+Give the episode a title of 3 to 8 words that names its subject. Answer in JSON."""
+
+OVERVIEW_FOCUS_SECTION = """The listener asked the episode to focus on: {focus}
+
+"""
+
+OVERVIEW_SCRIPT_PROMPT = """You write the script of a podcast in which two hosts talk about the listener's own documents.
+- {curious_host} is the curious host: asks the questions a smart listener would ask, reacts honestly, and checks understanding by putting ideas into plain words.
+- {expert_host} is the expert: has read the documents closely and explains them clearly, with concrete examples taken from them.
+
+Episode: {episode_title}
+{outline}
+
+Write segment {number} of {segment_count}: "{segment_title}". {focus}
+
+Passages from the documents:
+{passages}
+
+{previous_section}Rules:
+- Write about {line_count} lines. Each line is one to three short spoken sentences. Mostly alternate between the hosts.
+- Sound like two real people in conversation, not taking turns reading. Only {curious_host} reacts with surprise, and only when something really is surprising; {curious_host} also asks follow-ups and sums up in plain words. {expert_host} never acts surprised: {expert_host} confirms, corrects gently, and adds the next detail. Vary the reactions and the first words of lines, and never reuse one from the conversation so far.
+- Stay on this segment's focus. Earlier segments already covered their own topics, so don't repeat their points.
+- Every fact, number, name, and claim must come from the passages above. Never add facts from your own knowledge, and never invent personal stories, experiences, or anecdotes for the hosts. If the passages don't cover something, the hosts don't talk about it.
+- Set "source" on each line to the number of the passage it takes its facts from, or 0 for a line that states no fact (a reaction, a question, a transition).
+- No stage directions, sound effects, emojis, or markdown. Don't read out file names or passage numbers. Say numbers the way people say them aloud.
+
+{position_rule}
+
+Answer in JSON."""
+
+OVERVIEW_POSITION_RULES = {
+    "intro": "This is the opening. The first line is {curious_host} welcoming the listener to the episode and naming its subject (without naming the show). Then {expert_host} hooks them with the most interesting idea, and they preview what is coming.",
+    "middle": "This continues the conversation: move on from the last lines to this segment's topic with a question or a new idea, not a reaction, and with no welcome or recap.",
+    "outro": "This is the ending: sum up the main takeaways in the hosts' own words. The last two lines are {curious_host} thanking {expert_host} and the listener, and {expert_host} saying goodbye.",
+}
+
+
+def build_overview_summary_prompt(filename: str, text: str) -> str:
+    return OVERVIEW_SUMMARY_PROMPT.format(filename=filename, text=text)
+
+
+def build_overview_outline_prompt(
+    summaries: str,
+    hosts: tuple[str, str],
+    segment_count: int,
+    minutes: int,
+    focus: str | None,
+) -> str:
+    focus_section = OVERVIEW_FOCUS_SECTION.format(focus=focus) if focus else ""
+    return OVERVIEW_OUTLINE_PROMPT.format(
+        curious_host=hosts[0],
+        expert_host=hosts[1],
+        summaries=summaries,
+        focus_section=focus_section,
+        segment_count=segment_count,
+        minutes=minutes,
+    )
+
+
+def build_overview_script_prompt(
+    hosts: tuple[str, str],
+    episode_title: str,
+    outline: str,
+    number: int,
+    segment_count: int,
+    segment_title: str,
+    focus: str,
+    position: str,
+    passages: str,
+    previous_lines: str,
+    line_count: int,
+) -> str:
+    previous_section = (
+        f"The conversation so far ended with:\n{previous_lines}\n\n"
+        if previous_lines
+        else ""
+    )
+    position_rule = OVERVIEW_POSITION_RULES[position].format(
+        curious_host=hosts[0], expert_host=hosts[1]
+    )
+    return OVERVIEW_SCRIPT_PROMPT.format(
+        curious_host=hosts[0],
+        expert_host=hosts[1],
+        episode_title=episode_title,
+        outline=outline,
+        number=number,
+        segment_count=segment_count,
+        segment_title=segment_title,
+        focus=focus,
+        position_rule=position_rule,
+        passages=passages,
+        previous_section=previous_section,
+        line_count=line_count,
+    )

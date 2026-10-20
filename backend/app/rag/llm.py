@@ -29,6 +29,8 @@ class LLMProvider(Protocol):
 
     def complete(self, prompt: str) -> str: ...
 
+    def complete_json(self, prompt: str, schema: dict) -> dict: ...
+
     def chat_stream(
         self,
         messages: list[dict],
@@ -55,10 +57,12 @@ class OllamaLLMProvider:
         model: str | None = None,
         think: bool = True,
         max_tokens: int | None = None,
+        temperature: float = 0,
     ) -> None:
         self.model = model or settings.llm_model
         self.think = think
         self.max_tokens = max_tokens
+        self.temperature = temperature
 
     def base_request(self) -> dict:
         request = {
@@ -141,11 +145,12 @@ class OllamaLLMProvider:
             response_tokens=response_tokens,
         )
 
-    @traced("Ollama complete", run_type="llm")
-    def complete(self, prompt: str) -> str:
+    def generate(self, prompt: str, schema: dict | None = None) -> str:
         self.describe_call()
         request = {**self.base_request(), "prompt": prompt, "stream": False}
-        request["options"] = {**request["options"], "temperature": 0}
+        request["options"] = {**request["options"], "temperature": self.temperature}
+        if schema is not None:
+            request["format"] = schema
         response = httpx.post(
             f"{settings.ollama_url}/api/generate", json=request, timeout=300
         )
@@ -155,6 +160,14 @@ class OllamaLLMProvider:
             result.get("prompt_eval_count") or 0, result.get("eval_count") or 0
         )
         return result["response"].strip()
+
+    @traced("Ollama complete", run_type="llm")
+    def complete(self, prompt: str) -> str:
+        return self.generate(prompt)
+
+    @traced("Ollama complete JSON", run_type="llm")
+    def complete_json(self, prompt: str, schema: dict) -> dict:
+        return json.loads(self.generate(prompt, schema))
 
     @traced(
         "Ollama stream",

@@ -68,6 +68,15 @@ def get_page_writer() -> LLMProvider:
 
 
 @lru_cache
+def get_overview_writer() -> LLMProvider:
+    return OllamaLLMProvider(
+        model=settings.overview_llm_model,
+        think=False,
+        temperature=settings.overview_temperature,
+    )
+
+
+@lru_cache
 def get_vector_store() -> VectorStore:
     return QdrantVectorStore()
 
@@ -95,6 +104,11 @@ def get_chat_image_store() -> FileStore:
 @lru_cache
 def get_sandbox_file_store() -> FileStore:
     return DiskFileStore(settings.sandbox_file_dir)
+
+
+@lru_cache
+def get_overview_audio_store() -> FileStore:
+    return DiskFileStore(settings.overview_audio_dir)
 
 
 @lru_cache
@@ -143,6 +157,14 @@ def get_text_to_speech() -> TextToSpeech:
         english=KokoroTextToSpeech(),
         persian=PiperTextToSpeech(settings.tts_persian_model_path),
     )
+
+
+@lru_cache
+def get_host_voices() -> dict[str, TextToSpeech]:
+    return {
+        host: KokoroTextToSpeech(voice)
+        for host, voice in settings.overview_host_voices.items()
+    }
 
 
 @lru_cache

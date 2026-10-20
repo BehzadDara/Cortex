@@ -4,12 +4,15 @@ import CollectionsView from "./views/CollectionsView";
 import DashboardView from "./views/DashboardView";
 import DocumentsView from "./views/DocumentsView";
 import MemoriesView from "./views/MemoriesView";
+import OverviewDetailView from "./views/OverviewDetailView";
+import OverviewsView from "./views/OverviewsView";
 import PreviewView from "./views/PreviewView";
 
 const LINKS = [
   { to: "/chats", label: "Chat" },
   { to: "/documents", label: "Documents" },
   { to: "/collections", label: "Collections" },
+  { to: "/overviews", label: "Audio" },
   { to: "/memories", label: "Memories" },
   { to: "/dashboard", label: "Dashboard" },
 ];
@@ -39,6 +42,8 @@ function Shell() {
           <Route path="/chats/:id?" element={<ChatView />} />
           <Route path="/documents" element={<DocumentsView />} />
           <Route path="/collections" element={<CollectionsView />} />
+          <Route path="/overviews" element={<OverviewsView />} />
+          <Route path="/overviews/:id" element={<OverviewDetailView />} />
           <Route path="/memories" element={<MemoriesView />} />
           <Route path="/dashboard" element={<DashboardView />} />
           <Route path="*" element={<Navigate to="/chats" replace />} />

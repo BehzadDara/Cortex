@@ -158,6 +158,33 @@ class WebPage(Base):
     )
 
 
+class AudioOverview(Base):
+    __tablename__ = "audio_overviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    collection_id: Mapped[int | None] = mapped_column(
+        ForeignKey("collections.id", ondelete="SET NULL")
+    )
+    length: Mapped[str]
+    focus: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str | None]
+    status: Mapped[str] = mapped_column(default="queued")
+    stage: Mapped[str | None]
+    progress: Mapped[float] = mapped_column(default=0.0)
+    detail: Mapped[str | None] = mapped_column(Text)
+    segments: Mapped[list | None] = mapped_column(JSONB)
+    lines: Mapped[list | None] = mapped_column(JSONB)
+    sources: Mapped[list | None] = mapped_column(JSONB)
+    audio_filename: Mapped[str | None]
+    duration_ms: Mapped[int | None]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    collection: Mapped[Collection | None] = relationship()
+
+
 class PromptLog(Base):
     __tablename__ = "prompt_logs"
 

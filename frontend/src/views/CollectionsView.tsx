@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createCollection, deleteCollection, getCollections } from "../api";
 import type { Collection } from "../types";
 
@@ -6,6 +7,7 @@ export default function CollectionsView() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const refresh = useCallback(() => {
     getCollections().then(setCollections).catch(() => {});
@@ -81,7 +83,19 @@ export default function CollectionsView() {
                 <td className="hint">
                   {new Date(collection.created_at).toLocaleDateString()}
                 </td>
-                <td>
+                <td className="row-actions">
+                  <button
+                    className="ghost overview-shortcut"
+                    onClick={() => navigate(`/overviews?collection=${collection.id}`)}
+                    disabled={collection.document_count === 0}
+                    title={
+                      collection.document_count === 0
+                        ? "Add documents to make an audio overview"
+                        : "Make a two-host audio overview of this collection"
+                    }
+                  >
+                    Audio overview
+                  </button>
                   <button className="danger" onClick={() => remove(collection)}>
                     delete
                   </button>

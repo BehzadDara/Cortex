@@ -122,3 +122,46 @@ export interface PromptLog {
   response_tokens: number | null;
   created_at: string;
 }
+
+export type OverviewLength = "short" | "long";
+
+export type OverviewStatus = "queued" | "running" | "done" | "failed";
+
+export interface AudioOverviewSummary {
+  id: number;
+  collection_id: number | null;
+  collection_name: string | null;
+  length: OverviewLength;
+  focus: string | null;
+  title: string | null;
+  status: OverviewStatus;
+  stage: string | null;
+  progress: number;
+  detail: string | null;
+  audio_filename: string | null;
+  duration_ms: number | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface OverviewSegment {
+  title: string;
+  focus: string;
+  start_ms: number;
+}
+
+export interface OverviewLine {
+  segment: number;
+  speaker: string;
+  text: string;
+  source: number | null;
+  start_ms: number;
+  end_ms: number;
+}
+
+export interface AudioOverview extends AudioOverviewSummary {
+  hosts: string[];
+  segments: OverviewSegment[];
+  lines: OverviewLine[];
+  sources: Source[];
+}

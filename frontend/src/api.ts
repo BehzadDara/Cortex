@@ -1,4 +1,6 @@
 import type {
+  AudioOverview,
+  AudioOverviewSummary,
   Collection,
   ConversationDetail,
   ConversationSummary,
@@ -6,6 +8,7 @@ import type {
   Feedback,
   ImageAnswer,
   Job,
+  OverviewLength,
   Memory,
   Passage,
   PromptLog,
@@ -188,6 +191,30 @@ export const sandboxFileUrl = (filename: string) =>
 
 export const webPageUrl = (pageId: number | string) =>
   `${BASE}/web-pages/${pageId}`;
+
+export const getAudioOverviews = () =>
+  request<AudioOverviewSummary[]>("/audio-overviews");
+
+export const getAudioOverview = (id: number) =>
+  request<AudioOverview>(`/audio-overviews/${id}`);
+
+export const createAudioOverview = (
+  collectionId: number,
+  length: OverviewLength,
+  focus: string,
+) =>
+  request<AudioOverview>(
+    "/audio-overviews",
+    jsonInit("POST", { collection_id: collectionId, length, focus: focus || null }),
+  );
+
+export async function deleteAudioOverview(id: number): Promise<void> {
+  const response = await fetch(`${BASE}/audio-overviews/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await toError(response);
+}
+
+export const overviewAudioUrl = (filename: string) =>
+  `${BASE}/overview-audio/${filename}`;
 
 export const getStats = () => request<Stats>("/stats");
 

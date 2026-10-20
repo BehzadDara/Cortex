@@ -1,6 +1,7 @@
 import io
 import re
 import wave
+from functools import lru_cache
 from typing import Protocol
 
 import soundfile
@@ -18,15 +19,21 @@ class TextToSpeech(Protocol):
     def warm_up(self) -> None: ...
 
 
-class KokoroTextToSpeech:
-    def __init__(self) -> None:
-        from kokoro_onnx import Kokoro
+@lru_cache
+def load_kokoro():
+    from kokoro_onnx import Kokoro
 
-        self.model = Kokoro(settings.tts_model_path, settings.tts_voices_path)
+    return Kokoro(settings.tts_model_path, settings.tts_voices_path)
+
+
+class KokoroTextToSpeech:
+    def __init__(self, voice: str | None = None) -> None:
+        self.model = load_kokoro()
+        self.voice = voice or settings.tts_voice
 
     def speak(self, text: str) -> bytes:
         samples, sample_rate = self.model.create(
-            text, voice=settings.tts_voice, speed=settings.tts_speed
+            text, voice=self.voice, speed=settings.tts_speed
         )
         buffer = io.BytesIO()
         soundfile.write(buffer, samples, sample_rate, format="WAV", subtype="PCM_16")
