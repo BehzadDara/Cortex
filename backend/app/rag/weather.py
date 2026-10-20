@@ -3,6 +3,8 @@ from typing import Protocol
 
 import httpx
 
+from app.rag.language import is_persian
+
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 REQUEST_TIMEOUT_SECONDS = 10
@@ -84,7 +86,7 @@ class OpenMeteoWeather:
     def geocode(self, city: str) -> dict | None:
         response = httpx.get(
             GEOCODING_URL,
-            params={"name": city, "count": 1},
+            params={"name": city, "count": 1, "language": search_language(city)},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
@@ -109,3 +111,7 @@ class OpenMeteoWeather:
         )
         response.raise_for_status()
         return response.json()
+
+
+def search_language(city: str) -> str:
+    return "fa" if is_persian(city) else "en"

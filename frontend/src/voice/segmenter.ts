@@ -3,8 +3,8 @@ const FIRST_SEGMENT_MIN_CHARS = 12;
 const FIRST_CLAUSE_MIN_CHARS = 24;
 const SEGMENT_MIN_CHARS = 60;
 const SEGMENT_MAX_CHARS = 280;
-const SENTENCE_END = /[.!?…]+["'”’)\]]*(?=\s)/g;
-const CLAUSE_END = /[,;:—–](?=\s)/g;
+const SENTENCE_END = /[.!?…؟]+["'”’»)\]]*(?=\s)/g;
+const CLAUSE_END = /[,;:—–،؛](?=\s)/g;
 const BULLET = /^[-*+•]\s+/;
 const ABBREVIATIONS = new Set([
   "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "e.g", "i.e", "approx", "no",

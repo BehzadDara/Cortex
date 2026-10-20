@@ -21,6 +21,7 @@ langgraph-checkpoint-postgres
 psycopg-pool
 mlx-whisper
 kokoro-onnx
+piper-tts
 soundfile
 mem0ai
 ollama

@@ -2,6 +2,18 @@
 
 A running log of technical decisions and lessons, newest first.
 
+## 2026-10-21 — Persian voice: Piper beside Kokoro, and reminders after the question
+
+**The voice.** Kokoro has no Persian, so Persian answers were written in the chat but never spoken. Piper has five local Persian voices, so each was scored the same way: synthesize five sentences (including numbers and a question), transcribe the audio with Whisper forced to Persian, and measure the character error rate. gyro 5.9%, ganji 8.4%, reza_ibrahim 11.9%, amir 20.4%, ganji_adabi 25.3% (it garbled the sentence with a number). gyro also runs at 47× real time, against Kokoro's 5×. `BilingualTextToSpeech` picks the voice per segment by script, so a mixed conversation uses both.
+
+**What changed for Persian text.** The English number rules would have put "point" and "dollars" into Persian sentences, so normalization now depends on the language. espeak's Persian already reads `19.1`, `28%`, and `۸۲,۸۴۶` correctly. It read the Persian decimal sign ٫ as "virgul" and `5:12` as "five two-dots twelve", so ٫ becomes «ممیز» and a clock time becomes "5 و 12". The model also writes thousands with ٫ or `.` («۸۲.۷۸۶ دلار»), so a separator followed by exactly three digits after a non-zero whole number is read as grouping.
+
+**Tools in Persian.** A fresh Persian conversation called the right tool, but after a single tool-free Persian exchange (a greeting) the instruct model invented the weather, the time, and the bitcoin price: 0 of 4 tool calls. Persian examples in the voice prompt fixed it through the API but not for a real greeting in the browser (0/2). A short system message after the question ("check whether this is live data in any language; if so, call the tool now") took the same conversation from 8/12 to 12/12 offline and 12/12 live. Small talk still calls no tools (8/8), and news questions now search the web on 6/6 instead of 4/6, because "other live data" covers them. The weather tool had called Open-Meteo with `تهران` and found nothing, because geocoding searches English names by default. It now asks in Persian when the name is in Persian script.
+
+**Reply language.** After an English greeting the model answered Persian questions in English, even with "reply in the user's language" in both prompts. The reminder now names the language of the question, which the server detects by script ("the latest message is in Persian, so reply in Persian"), and the replies switched.
+
+**Whisper's language guess.** A short Persian greeting that went through the browser's microphone path came back as Turkish ("Selam halet çıtırı"), and the conversation went on in English. Detecting the language among English and Persian only costs one more encoder pass (0.3 s) on every turn, so `/transcribe` keeps Whisper's own guess and only re-detects among `stt_languages` when that guess is outside them, about 1 s in that rare case.
+
 ## 2026-10-20 — Voice conversation: orchestrated in the browser, answered by a model that doesn't think
 
 **Where the loop lives.** A server-side pipeline over a WebSocket (audio frames in, audio out) is how hosted voice agents are built, but it would have duplicated the assistant's streaming, approvals, and persistence. The browser already holds all of that, so it runs the loop: Silero VAD decides when a turn ends, `/transcribe` turns the audio into text, `/assistant` answers as for a typed question, and `/speak` synthesizes sentence by sentence. A voice turn is an ordinary chat turn, with its widgets, sources, and approval cards, and every piece stays behind its existing abstraction.

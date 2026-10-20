@@ -1,5 +1,6 @@
 import { transcribeAudio, warmUpVoice } from "../api";
 import { END_OF_TURN_SILENCE_MS, VoiceListener } from "./listener";
+import { consentIn, phrasesFor } from "./phrases";
 import { SpeechPlayer } from "./player";
 import { SpeechSegmenter } from "./segmenter";
 
@@ -53,9 +54,6 @@ interface Turn {
 const CONTINUATION_WINDOW_MS = 5000;
 const CONSENT_MAX_WORDS = 6;
 const ECHO_OVERLAP = 0.8;
-const FAILURE_REPLY = "Sorry, I ran into a problem answering that.";
-const YES = /\b(yes|yeah|yep|yup|sure|okay|ok|go ahead|do it|please do|allow|approve|go for it|of course|absolutely|sounds good)\b/i;
-const NO = /\b(no|nope|nah|don't|do not|cancel|deny|skip|stop|never mind|not now)\b/i;
 
 export class VoiceConversation {
   private listener: VoiceListener | null = null;
@@ -165,7 +163,9 @@ export class VoiceConversation {
     const turn = this.turn;
     if (!turn) return;
     this.segmenter.reset();
-    if (turn.streaming && !turn.silenced) this.player.enqueue(FAILURE_REPLY);
+    if (turn.streaming && !turn.silenced) {
+      this.player.enqueue(phrasesFor(turn.question).failure);
+    }
     turn.streaming = false;
     this.notice = message;
     this.emit();
@@ -176,7 +176,7 @@ export class VoiceConversation {
     if (!turn) return;
     if (!turn.silenced) {
       this.speak(this.segmenter.flush());
-      this.player.enqueue(consentQuestion(request));
+      this.player.enqueue(consentQuestion(request, turn.question));
     }
     turn.streaming = false;
     this.awaitingConsent = true;
@@ -246,7 +246,7 @@ export class VoiceConversation {
       return;
     }
     this.notice = null;
-    const consent = this.awaitingConsent ? consentIn(text) : null;
+    const consent = this.awaitingConsent ? consentReply(text) : null;
     if (consent !== null) {
       this.host.decide(consent);
       return;
@@ -373,27 +373,19 @@ function isEcho(text: string, recentlySpoken: string): boolean {
   return overlap >= ECHO_OVERLAP;
 }
 
-function consentIn(text: string): boolean | null {
+function consentReply(text: string): boolean | null {
   if (words(text).length > CONSENT_MAX_WORDS) return null;
-  const yes = YES.exec(text)?.index ?? Infinity;
-  const no = NO.exec(text)?.index ?? Infinity;
-  if (yes === Infinity && no === Infinity) return null;
-  return yes < no;
+  return consentIn(text);
 }
 
-function consentQuestion(request: VoiceApproval): string {
+function consentQuestion(request: VoiceApproval, question: string): string {
+  const phrases = phrasesFor(question);
   const query = String(request.arguments.query ?? "").trim();
-  if (request.name === "run_python") {
-    return "I wrote a short Python script for that. Should I run it?";
-  }
-  if (!query) return "Should I search the web for that?";
-  if (request.name === "web_image_search") {
-    return `Should I look for pictures of ${query} on the web?`;
-  }
-  if (request.name === "web_video_search") {
-    return `Should I look for videos of ${query} on the web?`;
-  }
-  return `Should I search the web for ${query}?`;
+  if (request.name === "run_python") return phrases.runCode;
+  if (!query) return phrases.searchWebUnspecified;
+  if (request.name === "web_image_search") return phrases.findImages(query);
+  if (request.name === "web_video_search") return phrases.findVideos(query);
+  return phrases.searchWeb(query);
 }
 
 function startFailure(reason: unknown): string {

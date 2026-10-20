@@ -13,6 +13,7 @@ from langgraph.types import interrupt
 
 from app.config import settings
 from app.rag.budget import estimate_tokens, kept_indices
+from app.rag.language import is_persian
 from app.rag.llm import LLMProvider, ToolCall
 from app.rag.prompts import build_route_prompt
 from app.rag.sanitize import neutralize_instructions
@@ -122,7 +123,11 @@ VOICE_PROMPT = (
     "them as you write it. When the user asks about news or anything "
     "recent — \"what's new with Tesla?\", \"who won the game last night?\", "
     "\"how did the market do today?\" — call web_search instead of saying "
-    "you lack real-time access. Answer the way a person speaks: short, "
+    "you lack real-time access. The user may speak Persian, and questions "
+    "in Persian need the same tools: \"هوای شیراز چطوره؟\" needs "
+    "get_weather, \"ساعت در لندن چنده؟\" needs world_clock, and \"قیمت "
+    "اتریوم چقدره؟\" needs crypto_price. Always answer in the language the "
+    "user speaks. Answer the way a person speaks: short, "
     "natural sentences, two or three unless they ask for more. Write plain "
     "prose with no markdown — no lists, headings, bold, or emoji — and spell "
     "out symbols the way they are said, like 20 percent or 5 dollars. Code, "
@@ -132,6 +137,14 @@ VOICE_PROMPT = (
     "after a tool that shows one, say its one or two most useful facts in "
     "a single sentence. Keep citing passages with [1]; the markers are not "
     "read aloud."
+)
+
+VOICE_REMINDER = (
+    "Before answering, check whether the question is about the time, the "
+    "weather, a price, or other live data in any language. If it is, call "
+    "the matching tool now, even if earlier answers in this conversation "
+    "did not use one. The user's latest message is in {language}, so reply "
+    "in {language}, even if earlier replies used another language."
 )
 
 FALLBACK_ANSWER = "I could not finish answering within the tool call limit."
@@ -599,12 +612,17 @@ def initial_state(
     memories: list[str] | None = None,
     voice: bool = False,
 ) -> AssistantState:
+    messages = [
+        system_message(timezone, memories, voice),
+        *history,
+        {"role": "user", "content": question},
+    ]
+    if voice:
+        language = "Persian" if is_persian(question) else "English"
+        reminder = VOICE_REMINDER.format(language=language)
+        messages.append({"role": "system", "content": reminder})
     return {
-        "messages": [
-            system_message(timezone, memories, voice),
-            *history,
-            {"role": "user", "content": question},
-        ],
+        "messages": messages,
         "sources": [],
         "widgets": [],
         "needs_documents": True,

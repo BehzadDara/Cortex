@@ -13,7 +13,12 @@ from app.rag.llm import LLMProvider, OllamaLLMProvider
 from app.rag.market_data import CoinGeckoMarketData, MarketDataProvider
 from app.rag.memory import DisabledMemoryStore, Mem0MemoryStore, MemoryStore
 from app.rag.reranking import CrossEncoderReranker, Reranker
-from app.rag.speech import KokoroTextToSpeech, TextToSpeech
+from app.rag.speech import (
+    BilingualTextToSpeech,
+    KokoroTextToSpeech,
+    PiperTextToSpeech,
+    TextToSpeech,
+)
 from app.rag.transcription import SpeechToText, WhisperSpeechToText
 from app.rag.vector_store import QdrantVectorStore, VectorStore
 from app.rag.vision import OllamaVisionProvider, VisionProvider
@@ -134,7 +139,10 @@ def get_speech_to_text() -> SpeechToText:
 
 @lru_cache
 def get_text_to_speech() -> TextToSpeech:
-    return KokoroTextToSpeech()
+    return BilingualTextToSpeech(
+        english=KokoroTextToSpeech(),
+        persian=PiperTextToSpeech(settings.tts_persian_model_path),
+    )
 
 
 @lru_cache

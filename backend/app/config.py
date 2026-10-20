@@ -52,8 +52,12 @@ class Settings(BaseSettings):
     rerank_candidates: int = 30
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     stt_model: str = "mlx-community/whisper-large-v3-turbo"
+    stt_languages: list[str] = ["en", "fa"]
     tts_model_path: str = str(BACKEND_ROOT / "voice_models" / "kokoro-v1.0.onnx")
     tts_voices_path: str = str(BACKEND_ROOT / "voice_models" / "voices-v1.0.bin")
+    tts_persian_model_path: str = str(
+        BACKEND_ROOT / "voice_models" / "fa_IR-gyro-medium.onnx"
+    )
     tts_voice: str = "af_heart"
     tts_speed: float = 1.0
     memory_recent_messages: int = 6

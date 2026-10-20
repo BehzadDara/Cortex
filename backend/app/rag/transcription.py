@@ -24,16 +24,36 @@ class WhisperSpeechToText:
         samples = waveform(audio)
         if is_silent(samples):
             return ""
-        return self.recognize(samples)
+        text, language = self.recognize(samples)
+        if language in settings.stt_languages:
+            return text
+        text, _ = self.recognize(samples, likeliest_language(samples))
+        return text
 
     def warm_up(self) -> None:
         self.recognize(np.zeros(int(WHISPER_SAMPLE_RATE * WARM_UP_SECONDS), np.float32))
 
-    def recognize(self, samples: np.ndarray) -> str:
+    def recognize(
+        self, samples: np.ndarray, language: str | None = None
+    ) -> tuple[str, str]:
         import mlx_whisper
 
-        result = mlx_whisper.transcribe(samples, path_or_hf_repo=settings.stt_model)
-        return result["text"].strip()
+        result = mlx_whisper.transcribe(
+            samples, path_or_hf_repo=settings.stt_model, language=language
+        )
+        return result["text"].strip(), result["language"]
+
+
+def likeliest_language(samples: np.ndarray) -> str:
+    import mlx.core as mx
+    from mlx_whisper.audio import N_FRAMES, N_SAMPLES, log_mel_spectrogram, pad_or_trim
+    from mlx_whisper.transcribe import ModelHolder
+
+    model = ModelHolder.get_model(settings.stt_model, mx.float16)
+    mel = log_mel_spectrogram(samples, n_mels=model.dims.n_mels, padding=N_SAMPLES)
+    segment = pad_or_trim(mel, N_FRAMES, axis=-2).astype(mx.float16)
+    _, probabilities = model.detect_language(segment)
+    return max(settings.stt_languages, key=lambda code: probabilities.get(code, 0.0))
 
 
 def is_silent(samples: np.ndarray) -> bool:

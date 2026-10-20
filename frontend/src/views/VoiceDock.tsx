@@ -90,7 +90,7 @@ export function VoiceDock({
         <p className="voice-title" role="status" aria-live="polite">
           {titleFor(snapshot, activity)}
         </p>
-        <p className={failed ? "voice-detail failed" : "voice-detail"}>
+        <p className={failed ? "voice-detail failed" : "voice-detail"} dir="auto">
           {detailFor(snapshot)}
         </p>
         {latency && !failed && <LatencyReadout latency={latency} />}

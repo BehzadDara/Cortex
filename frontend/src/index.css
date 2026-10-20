@@ -1094,6 +1094,7 @@ button.voice-control[data-tip]:focus-visible::after {
   margin-top: 2px;
   font-size: 13px;
   color: var(--muted-foreground);
+  text-align: left;
 }
 
 .voice-detail.failed {
