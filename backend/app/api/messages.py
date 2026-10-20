@@ -4,9 +4,16 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.assistant import build_graph, recall_for, start_run, stream_events
+from app.api.assistant import (
+    build_graph,
+    claim_run,
+    recall_for,
+    start_run,
+    stream_events,
+)
 from app.api.conversations import fallback_title, to_message_response, to_summary
 from app.assistant_graph import initial_state
+from app.config import settings
 from app.dependencies import (
     get_embedding_provider,
     get_fast_llm_provider,
@@ -88,7 +95,8 @@ def run_variant(
     timezone: str | None,
     providers: dict,
 ) -> StreamingResponse:
-    graph = build_graph(session, **providers, parent_id=parent_id)
+    cancelled = claim_run(conversation.id)
+    graph = build_graph(session, **providers, parent_id=parent_id, cancelled=cancelled)
     thread_id = uuid4().hex
     start_run(session, conversation, thread_id, parent_id)
     return StreamingResponse(
@@ -105,6 +113,8 @@ def run_variant(
             parent_id,
             None,
             providers["llm"],
+            settings.llm_model,
+            cancelled,
         ),
         media_type="text/event-stream",
     )

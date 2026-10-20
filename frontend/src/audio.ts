@@ -74,7 +74,7 @@ function concatenate(chunks: Float32Array[]): Float32Array {
   return samples;
 }
 
-function encodeWavPcm16(samples: Float32Array, sampleRate: number): Blob {
+export function encodeWavPcm16(samples: Float32Array, sampleRate: number): Blob {
   const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
   writeAscii(view, 0, "RIFF");
   view.setUint32(4, 36 + samples.length * 2, true);

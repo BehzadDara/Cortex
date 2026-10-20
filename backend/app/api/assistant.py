@@ -1,6 +1,7 @@
 import json
+import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,7 @@ from app.api.common import (
     title_event,
 )
 from app.assistant_graph import (
+    RunCancelled,
     build_assistant_graph,
     extract_steps,
     final_answer,
@@ -44,6 +46,7 @@ from app.dependencies import (
     get_session,
     get_vector_store,
     get_video_search,
+    get_voice_llm_provider,
     get_weather_provider,
     get_web_search,
 )
@@ -75,6 +78,42 @@ from app.tools import (
 
 router = APIRouter(tags=["assistant"])
 
+active_runs: dict[int, threading.Event] = {}
+
+
+def claim_run(conversation_id: int) -> threading.Event:
+    cancel_run(conversation_id)
+    cancelled = threading.Event()
+    active_runs[conversation_id] = cancelled
+    return cancelled
+
+
+def cancel_run(conversation_id: int) -> None:
+    cancelled = active_runs.pop(conversation_id, None)
+    if cancelled is not None:
+        cancelled.set()
+
+
+def release_run(conversation_id: int, cancelled: threading.Event) -> None:
+    if active_runs.get(conversation_id) is cancelled:
+        del active_runs[conversation_id]
+
+
+def graph_events(
+    stream: Iterable, conversation_id: int, cancelled: threading.Event
+) -> Iterator[tuple[str, dict]]:
+    try:
+        for event in stream:
+            yield event
+    except RunCancelled:
+        return
+    except GeneratorExit:
+        cancelled.set()
+        raise
+    finally:
+        release_run(conversation_id, cancelled)
+
+
 def build_graph(
     session: Session,
     embeddings: EmbeddingProvider,
@@ -87,6 +126,7 @@ def build_graph(
     market_data: MarketDataProvider,
     image_generator: ImageGenerator,
     parent_id: int | None = None,
+    cancelled: threading.Event | None = None,
 ):
     tools = build_tools(
         session,
@@ -119,6 +159,7 @@ def build_graph(
         search_images,
         search_web_images,
         checkpointer=get_checkpointer(),
+        cancelled=cancelled,
     )
 
 
@@ -142,10 +183,19 @@ def clear_active_thread(conversation_id: int) -> None:
             session.commit()
 
 
+def answering_llm(voice: bool) -> LLMProvider:
+    return get_voice_llm_provider() if voice else get_llm_provider()
+
+
+def answering_model(voice: bool) -> str:
+    return settings.voice_llm_model if voice else settings.llm_model
+
+
 def save_prompt_log(
     question: str,
     prompt: str,
     response: str,
+    model: str,
     started: float,
     prompt_tokens: int,
     response_tokens: int,
@@ -157,7 +207,7 @@ def save_prompt_log(
                 question=question,
                 prompt=prompt,
                 response=response,
-                model=settings.llm_model,
+                model=model,
                 latency_ms=latency_ms,
                 prompt_tokens=prompt_tokens,
                 response_tokens=response_tokens,
@@ -188,6 +238,8 @@ def stream_events(
     parent_id: int | None,
     holder: dict | None,
     llm: LLMProvider,
+    model: str,
+    cancelled: threading.Event,
     snapshot: dict | None = None,
 ) -> Iterator[str]:
     yield sse_event({"type": "conversation", "id": conversation_id})
@@ -203,7 +255,7 @@ def stream_events(
         run_config(thread_id, conversation_id, trace_id),
         stream_mode=["custom", "updates", "values"],
     )
-    for mode, chunk in stream:
+    for mode, chunk in graph_events(stream, conversation_id, cancelled):
         if mode == "custom":
             yield sse_event(chunk)
         elif mode == "updates" and "__interrupt__" in chunk:
@@ -214,6 +266,8 @@ def stream_events(
         if event:
             yield event
 
+    if cancelled.is_set():
+        return
     if approval is not None:
         yield sse_event({"type": "approval", **approval, "thread": thread_id})
         return
@@ -254,6 +308,7 @@ def stream_events(
             question,
             json.dumps(state_prompt(final_state), ensure_ascii=False),
             answer,
+            model,
             started,
             usage.prompt_tokens,
             usage.response_tokens,
@@ -273,7 +328,6 @@ def assistant(
     session: Session = Depends(get_session),
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
-    llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
@@ -290,7 +344,9 @@ def assistant(
 
     leaf = leaf_of(session, conversation)
     parent_id = leaf.id if leaf else None
-    history = history_for(session, conversation)
+    history = history_for(session, conversation, with_tool_steps=request.voice)
+    llm = answering_llm(request.voice)
+    cancelled = claim_run(conversation.id)
     graph = build_graph(
         session,
         embeddings,
@@ -303,6 +359,7 @@ def assistant(
         market_data,
         image_generator,
         parent_id=parent_id,
+        cancelled=cancelled,
     )
     thread_id = uuid4().hex
     start_run(session, conversation, thread_id, parent_id)
@@ -314,12 +371,15 @@ def assistant(
                 request.question,
                 request.timezone,
                 recall_for(conversation.id, request.question),
+                voice=request.voice,
             ),
             thread_id,
             conversation.id,
             parent_id,
             title_holder if is_new else None,
             llm,
+            answering_model(request.voice),
+            cancelled,
         ),
         media_type="text/event-stream",
     )
@@ -331,7 +391,6 @@ def continue_run(
     session: Session = Depends(get_session),
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
-    llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
@@ -345,6 +404,8 @@ def continue_run(
     if conversation.active_thread is None:
         raise HTTPException(status_code=409, detail="No active run to continue")
 
+    llm = get_llm_provider()
+    cancelled = claim_run(conversation.id)
     graph = build_graph(
         session,
         embeddings,
@@ -357,6 +418,7 @@ def continue_run(
         market_data,
         image_generator,
         parent_id=conversation.active_parent_id,
+        cancelled=cancelled,
     )
     thread_id = conversation.active_thread
     state = graph.get_state({"configurable": {"thread_id": thread_id}})
@@ -379,6 +441,8 @@ def continue_run(
             conversation.active_parent_id,
             None,
             llm,
+            settings.llm_model,
+            cancelled,
             snapshot=snapshot,
         ),
         media_type="text/event-stream",
@@ -392,6 +456,7 @@ def stop_run(
     conversation = session.get(Conversation, request.conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    cancel_run(conversation.id)
     conversation.active_thread = None
     conversation.active_parent_id = None
     session.commit()
@@ -404,7 +469,6 @@ def resume(
     session: Session = Depends(get_session),
     embeddings: EmbeddingProvider = Depends(get_embedding_provider),
     vector_store: VectorStore = Depends(get_vector_store),
-    llm: LLMProvider = Depends(get_llm_provider),
     fast_llm: LLMProvider = Depends(get_fast_llm_provider),
     reranker: Reranker = Depends(get_reranker),
     web_search: WebSearchProvider = Depends(get_web_search),
@@ -416,6 +480,8 @@ def resume(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    llm = answering_llm(request.voice)
+    cancelled = claim_run(conversation.id)
     graph = build_graph(
         session,
         embeddings,
@@ -428,6 +494,7 @@ def resume(
         market_data,
         image_generator,
         parent_id=conversation.active_parent_id,
+        cancelled=cancelled,
     )
     return StreamingResponse(
         stream_events(
@@ -438,6 +505,8 @@ def resume(
             conversation.active_parent_id,
             None,
             llm,
+            answering_model(request.voice),
+            cancelled,
         ),
         media_type="text/event-stream",
     )

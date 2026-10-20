@@ -29,6 +29,7 @@ import {
   transcribeAudio,
 } from "../api";
 import { Recorder } from "../audio";
+import { VoiceConversation } from "../voice/conversation";
 import type {
   ConversationDetail,
   ConversationSummary,
@@ -40,6 +41,7 @@ import type {
 } from "../types";
 import { WidgetList } from "./ChatWidgets";
 import { DocumentViewer } from "./DocumentViewer";
+import { VoiceDock } from "./VoiceDock";
 
 interface Attachment {
   name: string;
@@ -123,6 +125,20 @@ function approvalPrompt(name: string): string {
   return APPROVAL_PROMPTS[name] ?? "Cortex wants to search the web for ";
 }
 
+function runningActivity(messages: ChatMessage[]): string | null {
+  const steps = messages[messages.length - 1]?.steps ?? [];
+  const running = [...steps].reverse().find((step) => step.result === null);
+  return running ? stepLabel(running) : null;
+}
+
+function withoutUnfinishedExchange(messages: ChatMessage[]): ChatMessage[] {
+  const last = messages[messages.length - 1];
+  if (last?.role !== "assistant" || last.id !== undefined) return messages;
+  const previous = messages[messages.length - 2];
+  const dropped = previous?.role === "user" && previous.id === undefined ? 2 : 1;
+  return messages.slice(0, messages.length - dropped);
+}
+
 function stepLabel(step: ToolStep): string {
   const labels = STEP_LABELS[step.name] ?? {
     running: `Running ${step.name}`,
@@ -189,6 +205,19 @@ function SpeakerIcon() {
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
       <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
       <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  );
+}
+
+function AudioLinesIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 10v3" />
+      <path d="M6 6v11" />
+      <path d="M10 3v18" />
+      <path d="M14 8v7" />
+      <path d="M18 5v13" />
+      <path d="M22 10v3" />
     </svg>
   );
 }
@@ -867,6 +896,10 @@ export default function ChatView() {
   const speechAbort = useRef<AbortController | null>(null);
   const speechPlayer = useRef<HTMLAudioElement | null>(null);
   const speechUrl = useRef<string | null>(null);
+  const [voiceMode, setVoiceMode] = useState<VoiceConversation | null>(null);
+  const voiceSession = useRef<VoiceConversation | null>(null);
+  const voiceActions = useRef({ ask: askByVoice, decide: decideByVoice });
+  voiceActions.current = { ask: askByVoice, decide: decideByVoice };
 
   function abortActiveStream() {
     streamAbort.current?.abort();
@@ -908,12 +941,14 @@ export default function ChatView() {
   useEffect(() => {
     if (routeId === null) {
       openSequence.current++;
+      endVoiceMode();
       abortActiveStream();
       setConversationId(null);
       setMessages([]);
       setBranch(null);
       setError(null);
     } else if (routeId !== conversationId) {
+      endVoiceMode();
       abortActiveStream();
       openConversation(routeId);
     }
@@ -926,6 +961,7 @@ export default function ChatView() {
   useEffect(
     () => () => {
       recorder.current?.cancel();
+      voiceSession.current?.stop();
       stopSpeech();
     },
     [],
@@ -1000,6 +1036,40 @@ export default function ChatView() {
     } catch {
       setError("Microphone unavailable — check browser permissions.");
     }
+  }
+
+  function startVoiceMode() {
+    stopSpeech();
+    setError(null);
+    const engine = new VoiceConversation({
+      ask: (question) => voiceActions.current.ask(question),
+      decide: (approved) => voiceActions.current.decide(approved),
+    });
+    voiceSession.current = engine;
+    setVoiceMode(engine);
+    void engine.start();
+  }
+
+  function endVoiceMode() {
+    voiceSession.current?.stop();
+    voiceSession.current = null;
+    setVoiceMode(null);
+  }
+
+  function restartVoiceMode() {
+    endVoiceMode();
+    startVoiceMode();
+  }
+
+  function askByVoice(question: string) {
+    abortActiveStream();
+    setMessages(withoutUnfinishedExchange);
+    void ask(question);
+  }
+
+  function decideByVoice(approved: boolean) {
+    const approval = messages[messages.length - 1]?.approval;
+    if (approval) void decideApproval(approval, approved);
   }
 
   async function openConversation(target: number) {
@@ -1218,7 +1288,10 @@ export default function ChatView() {
 
   const assistantHandlers = (firstQuestion: string) => ({
     onConversation: (created: number) => adoptConversation(created, firstQuestion),
-    onToken: appendAssistantToken,
+    onToken: (token: string) => {
+      appendAssistantToken(token);
+      voiceSession.current?.token(token);
+    },
     onTitle: applyTitle,
     onToolCall: addStep,
     onToolResult: resolveStep,
@@ -1226,12 +1299,24 @@ export default function ChatView() {
     onWidget: addWidget,
     onUsage: applyUsage,
     onSaved: applySavedId,
-    onApproval: requestApproval,
+    onApproval: (name: string, args: Record<string, unknown>, thread: string) => {
+      requestApproval(name, args, thread);
+      voiceSession.current?.approval({ name, arguments: args });
+    },
   });
+
+  function finishVoiceTurn() {
+    if (!awaitingApproval.current) voiceSession.current?.finished();
+  }
+
+  function failVoiceTurn(message: string) {
+    voiceSession.current?.failed(message);
+  }
 
   async function decideApproval(approval: Approval, approved: boolean) {
     if (conversationId === null) return;
     awaitingApproval.current = false;
+    voiceSession.current?.approvalDecided();
     updateLastMessage((last) => ({
       ...last,
       approval: undefined,
@@ -1246,14 +1331,18 @@ export default function ChatView() {
         approved,
         assistantHandlers(""),
         signal,
+        voiceSession.current !== null,
       );
       refreshConversations();
+      finishVoiceTurn();
     } catch (caught) {
       if (isAbortError(caught)) return;
       setMessages((current) =>
         current[current.length - 1]?.pending ? current.slice(0, -1) : current,
       );
-      setError(caught instanceof Error ? caught.message : String(caught));
+      const message = caught instanceof Error ? caught.message : String(caught);
+      setError(message);
+      failVoiceTurn(message);
     } finally {
       if (!signal.aborted && !awaitingApproval.current) setBusy(false);
     }
@@ -1307,14 +1396,23 @@ export default function ChatView() {
 
     const image = attachedImage;
     const preview = attachedPreview;
-    const existingId = conversationId;
-
-    setError(null);
-    setBusy(true);
     setQuestion("");
     setAttachedImage(null);
     setAttachedPreview(null);
     if (imageInput.current) imageInput.current.value = "";
+    await ask(trimmed, image, preview);
+  }
+
+  async function ask(
+    trimmed: string,
+    image: File | null = null,
+    preview: string | null = null,
+  ) {
+    const existingId = conversationId;
+    const voiceTurn = voiceSession.current !== null;
+
+    setError(null);
+    setBusy(true);
     setMessages((current) => [
       ...current,
       {
@@ -1343,15 +1441,19 @@ export default function ChatView() {
           existingId,
           assistantHandlers(trimmed),
           signal,
+          voiceTurn,
         );
         refreshConversations();
+        finishVoiceTurn();
       }
     } catch (caught) {
       if (isAbortError(caught)) return;
       setMessages((current) =>
         current[current.length - 1]?.pending ? current.slice(0, -1) : current,
       );
-      setError(caught instanceof Error ? caught.message : String(caught));
+      const message = caught instanceof Error ? caught.message : String(caught);
+      setError(message);
+      failVoiceTurn(message);
     } finally {
       if (!signal.aborted && !awaitingApproval.current) setBusy(false);
     }
@@ -1642,89 +1744,111 @@ export default function ChatView() {
 
         <div className="chat-composer">
           <div className="chat-composer-inner">
-            {attachedImage && attachedPreview && (
-              <div className="attachment-preview">
-                <img src={attachedPreview} alt={attachedImage.name} />
-                <div className="attachment-meta">
-                  <span className="attachment-name">{attachedImage.name}</span>
+            {voiceMode ? (
+              <VoiceDock
+                engine={voiceMode}
+                activity={runningActivity(messages)}
+                onEnd={endVoiceMode}
+                onRetry={restartVoiceMode}
+              />
+            ) : (
+              <>
+                {attachedImage && attachedPreview && (
+                  <div className="attachment-preview">
+                    <img src={attachedPreview} alt={attachedImage.name} />
+                    <div className="attachment-meta">
+                      <span className="attachment-name">{attachedImage.name}</span>
+                      <button
+                        className="danger"
+                        aria-label="Remove image"
+                        onClick={clearAttachment}
+                      >
+                        remove
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="row">
+                  <input
+                    ref={imageInput}
+                    type="file"
+                    accept=".png,.jpg,.jpeg"
+                    style={{ display: "none" }}
+                    onChange={(event) => attachImage(event.target.files?.[0] ?? null)}
+                  />
                   <button
-                    className="danger"
-                    aria-label="Remove image"
-                    onClick={clearAttachment}
+                    className="ghost icon"
+                    aria-label="Attach an image"
+                    data-tip="Attach an image"
+                    disabled={busy || voice !== "idle"}
+                    onClick={() => imageInput.current?.click()}
                   >
-                    remove
+                    <PaperclipIcon />
                   </button>
+                  <button
+                    className={
+                      voice === "recording" ? "ghost icon recording" : "ghost icon"
+                    }
+                    aria-label={
+                      voice === "recording"
+                        ? "Stop recording and send"
+                        : "Ask by voice"
+                    }
+                    aria-pressed={voice === "recording"}
+                    data-tip={voice === "recording" ? "Stop and send" : "Dictate"}
+                    disabled={busy || voice === "transcribing"}
+                    onClick={toggleRecording}
+                  >
+                    {voice === "recording" ? <StopIcon /> : <MicIcon />}
+                  </button>
+                  <button
+                    className="ghost icon"
+                    aria-label="Start a voice conversation"
+                    data-tip="Voice mode"
+                    disabled={busy || voice !== "idle"}
+                    onClick={startVoiceMode}
+                  >
+                    <AudioLinesIcon />
+                  </button>
+                  <input
+                    className="grow"
+                    placeholder={
+                      busy
+                        ? "Answering…"
+                        : voice === "recording"
+                          ? "Listening…"
+                          : voice === "transcribing"
+                            ? "Transcribing…"
+                            : attachedImage
+                              ? "Ask about the image…"
+                              : "Ask a question…"
+                    }
+                    value={question}
+                    disabled={busy || voice !== "idle"}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    onKeyDown={(event) => event.key === "Enter" && submit()}
+                  />
+                  {busy ? (
+                    <button
+                      className="primary stop-generation"
+                      aria-label="Stop generating"
+                      onClick={stopGeneration}
+                    >
+                      <StopIcon size={13} />
+                      Stop
+                    </button>
+                  ) : (
+                    <button
+                      className="primary"
+                      onClick={submit}
+                      disabled={voice !== "idle"}
+                    >
+                      Send
+                    </button>
+                  )}
                 </div>
-              </div>
+              </>
             )}
-            <div className="row">
-              <input
-                ref={imageInput}
-                type="file"
-                accept=".png,.jpg,.jpeg"
-                style={{ display: "none" }}
-                onChange={(event) => attachImage(event.target.files?.[0] ?? null)}
-              />
-              <button
-                className="ghost icon"
-                aria-label="Attach an image"
-                disabled={busy || voice !== "idle"}
-                onClick={() => imageInput.current?.click()}
-              >
-                <PaperclipIcon />
-              </button>
-              <button
-                className={
-                  voice === "recording" ? "ghost icon recording" : "ghost icon"
-                }
-                aria-label={
-                  voice === "recording"
-                    ? "Stop recording and send"
-                    : "Ask by voice"
-                }
-                aria-pressed={voice === "recording"}
-                disabled={busy || voice === "transcribing"}
-                onClick={toggleRecording}
-              >
-                {voice === "recording" ? <StopIcon /> : <MicIcon />}
-              </button>
-              <input
-                className="grow"
-                placeholder={
-                  busy
-                    ? "Answering…"
-                    : voice === "recording"
-                      ? "Listening…"
-                      : voice === "transcribing"
-                        ? "Transcribing…"
-                        : attachedImage
-                          ? "Ask about the image…"
-                          : "Ask a question…"
-                }
-                value={question}
-                disabled={busy || voice !== "idle"}
-                onChange={(event) => setQuestion(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && submit()}
-              />
-              {busy ? (
-                <button
-                  className="primary stop-generation"
-                  aria-label="Stop generating"
-                  onClick={stopGeneration}
-                >
-                  <StopIcon size={13} />
-                  Stop
-                </button>
-              ) : (
-                <button
-                  className="primary"
-                  onClick={submit}
-                  disabled={voice !== "idle"}
-                >
-                  Send
-                </button>
-              )}
-            </div>
             {error && <p className="error">{error}</p>}
           </div>
         </div>

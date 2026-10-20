@@ -1,5 +1,6 @@
 import operator
 import re
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -116,6 +117,23 @@ MEMORY_PROMPT = (
     "you remember anything."
 )
 
+VOICE_PROMPT = (
+    "The user is talking to you by voice, and your answer is read aloud to "
+    "them as you write it. When the user asks about news or anything "
+    "recent — \"what's new with Tesla?\", \"who won the game last night?\", "
+    "\"how did the market do today?\" — call web_search instead of saying "
+    "you lack real-time access. Answer the way a person speaks: short, "
+    "natural sentences, two or three unless they ask for more. Write plain "
+    "prose with no markdown — no lists, headings, bold, or emoji — and spell "
+    "out symbols the way they are said, like 20 percent or 5 dollars. Code, "
+    "tables, and diagrams are shown on screen and skipped when reading "
+    "aloud, so include one only when the user asks for it, and say in one "
+    "sentence what you put on screen. Cards are not read aloud either, so "
+    "after a tool that shows one, say its one or two most useful facts in "
+    "a single sentence. Keep citing passages with [1]; the markers are not "
+    "read aloud."
+)
+
 FALLBACK_ANSWER = "I could not finish answering within the tool call limit."
 
 DECLINED_RESULT = "The user declined the web search."
@@ -135,6 +153,10 @@ ALREADY_SURFACED = "Already surfaced above; no new passages for this query."
 RETRIEVED_PASSAGES_OPEN = "<passages>"
 
 RETRIEVED_PASSAGES_CLOSE = "</passages>"
+
+
+class RunCancelled(Exception):
+    pass
 
 
 class AssistantState(TypedDict):
@@ -272,6 +294,7 @@ def build_assistant_graph(
     search_images=None,
     search_web_images=None,
     checkpointer: BaseCheckpointSaver | None = None,
+    cancelled: threading.Event | None = None,
 ):
     definitions = [
         DOCUMENT_SEARCH_DEFINITION,
@@ -280,6 +303,10 @@ def build_assistant_graph(
     ]
     tool_map = {tool.name: traced_tool(tool) for tool in tools}
     definitions_tokens = estimate_tokens(str(definitions))
+
+    def stop_if_cancelled() -> None:
+        if cancelled is not None and cancelled.is_set():
+            raise RunCancelled
 
     def run_search(
         search,
@@ -428,14 +455,16 @@ def build_assistant_graph(
         }
 
     def model(state: AssistantState) -> dict:
+        stop_if_cancelled()
         writer = get_stream_writer()
         indices = kept_indices(state["messages"], definitions_tokens)
         prompt = [state["messages"][index] for index in indices]
-        reply = llm.chat_stream(
-            prompt,
-            definitions,
-            lambda token: writer({"type": "token", "content": token}),
-        )
+
+        def stream_token(token: str) -> None:
+            stop_if_cancelled()
+            writer({"type": "token", "content": token})
+
+        reply = llm.chat_stream(prompt, definitions, stream_token)
         for call in reply.tool_calls:
             writer(
                 {"type": "tool_call", "name": call.name, "arguments": call.arguments}
@@ -450,6 +479,7 @@ def build_assistant_graph(
         }
 
     def run_tools(state: AssistantState) -> dict:
+        stop_if_cancelled()
         writer = get_stream_writer()
         calls = parse_tool_calls(state["messages"][-1])
         approvals = {
@@ -546,12 +576,16 @@ def build_assistant_graph(
 
 
 def system_message(
-    timezone: str | None = None, memories: list[str] | None = None
+    timezone: str | None = None,
+    memories: list[str] | None = None,
+    voice: bool = False,
 ) -> dict:
     today = datetime.now().strftime("%A, %B %-d, %Y")
     content = f"{SYSTEM_PROMPT} Today is {today}."
     if timezone:
         content += f" The user's timezone is {timezone}."
+    if voice:
+        content += "\n\n" + VOICE_PROMPT
     if memories:
         facts = "\n".join(f"- {memory}" for memory in memories)
         content += "\n\n" + MEMORY_PROMPT.format(facts=facts)
@@ -563,10 +597,11 @@ def initial_state(
     question: str,
     timezone: str | None = None,
     memories: list[str] | None = None,
+    voice: bool = False,
 ) -> AssistantState:
     return {
         "messages": [
-            system_message(timezone, memories),
+            system_message(timezone, memories, voice),
             *history,
             {"role": "user", "content": question},
         ],

@@ -7,6 +7,8 @@ from app.models import Conversation, Message
 from app.rag.llm import LLMProvider
 from app.rag.prompts import build_summary_prompt, build_title_prompt
 
+PASSAGE_TOOLS = {"search_documents", "web_search"}
+
 
 def path_messages(session: Session, conversation: Conversation) -> list[Message]:
     path: list[Message] = []
@@ -92,7 +94,24 @@ def save_title(llm: LLMProvider, conversation_id: int, question: str) -> str | N
     return title
 
 
-def conversation_messages(path: list[Message]) -> list[dict]:
+def tool_step_messages(steps: list[dict] | None) -> list[dict]:
+    replayed = [step for step in steps or [] if step["name"] not in PASSAGE_TOOLS]
+    if not replayed:
+        return []
+    calls = [
+        {"function": {"name": step["name"], "arguments": step["arguments"]}}
+        for step in replayed
+    ]
+    results = [
+        {"role": "tool", "tool_name": step["name"], "content": step["result"] or ""}
+        for step in replayed
+    ]
+    return [{"role": "assistant", "content": "", "tool_calls": calls}, *results]
+
+
+def conversation_messages(
+    path: list[Message], with_tool_steps: bool = False
+) -> list[dict]:
     messages: list[dict] = []
     summary, _ = path_summary(path)
     if summary:
@@ -102,15 +121,17 @@ def conversation_messages(path: list[Message]) -> list[dict]:
                 "content": f"Summary of earlier conversation:\n{summary}",
             }
         )
-    messages.extend(
-        {"role": message.role, "content": message.content}
-        for message in recent_messages(path)
-    )
+    for message in recent_messages(path):
+        if with_tool_steps and message.role == "assistant":
+            messages.extend(tool_step_messages(message.steps))
+        messages.append({"role": message.role, "content": message.content})
     return messages
 
 
-def history_for(session: Session, conversation: Conversation) -> list[dict]:
-    return conversation_messages(path_messages(session, conversation))
+def history_for(
+    session: Session, conversation: Conversation, with_tool_steps: bool = False
+) -> list[dict]:
+    return conversation_messages(path_messages(session, conversation), with_tool_steps)
 
 
 def attach(session: Session, message: Message, parent_id: int | None) -> None:

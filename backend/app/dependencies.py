@@ -44,6 +44,11 @@ def get_llm_provider() -> LLMProvider:
 
 
 @lru_cache
+def get_voice_llm_provider() -> LLMProvider:
+    return OllamaLLMProvider(model=settings.voice_llm_model, think=False)
+
+
+@lru_cache
 def get_fast_llm_provider() -> LLMProvider:
     return OllamaLLMProvider(model=settings.fast_llm_model, think=False)
 

@@ -8,20 +8,38 @@ from app.config import settings
 
 WHISPER_SAMPLE_RATE = 16000
 
+SILENCE_RMS = 0.003
+
+WARM_UP_SECONDS = 0.5
+
 
 class SpeechToText(Protocol):
     def transcribe(self, audio: bytes) -> str: ...
 
+    def warm_up(self) -> None: ...
+
 
 class WhisperSpeechToText:
     def transcribe(self, audio: bytes) -> str:
+        samples = waveform(audio)
+        if is_silent(samples):
+            return ""
+        return self.recognize(samples)
+
+    def warm_up(self) -> None:
+        self.recognize(np.zeros(int(WHISPER_SAMPLE_RATE * WARM_UP_SECONDS), np.float32))
+
+    def recognize(self, samples: np.ndarray) -> str:
         import mlx_whisper
 
-        samples = waveform(audio)
-        if samples.size == 0:
-            return ""
         result = mlx_whisper.transcribe(samples, path_or_hf_repo=settings.stt_model)
         return result["text"].strip()
+
+
+def is_silent(samples: np.ndarray) -> bool:
+    if samples.size == 0:
+        return True
+    return float(np.sqrt(np.mean(np.square(samples)))) < SILENCE_RMS
 
 
 def waveform(audio: bytes) -> np.ndarray:

@@ -71,12 +71,14 @@ class AskRequest(BaseModel):
     question: str
     conversation_id: int | None = None
     timezone: str | None = None
+    voice: bool = False
 
 
 class ResumeRequest(BaseModel):
     thread: str
     conversation_id: int
     approved: bool
+    voice: bool = False
 
 
 class ContinueRequest(BaseModel):

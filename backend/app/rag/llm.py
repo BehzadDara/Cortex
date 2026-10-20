@@ -36,8 +36,12 @@ class LLMProvider(Protocol):
         on_token: Callable[[str], None],
     ) -> ChatReply:         ...
 
+    def warm_up(self) -> None: ...
 
-def chat_completion(reply: ChatReply) -> dict:
+
+def chat_completion(reply: ChatReply | None) -> dict:
+    if reply is None:
+        return {}
     return {"choices": [{"message": reply.raw_message}]}
 
 
@@ -66,6 +70,14 @@ class OllamaLLMProvider:
         if self.think:
             request["think"] = True
         return request
+
+    def warm_up(self) -> None:
+        response = httpx.post(
+            f"{settings.ollama_url}/api/generate",
+            json=self.base_request(),
+            timeout=300,
+        )
+        response.raise_for_status()
 
     def describe_call(self) -> None:
         describe_run(ls_provider="ollama", ls_model_name=self.model)

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
 
     llm_model: str = "qwen3:4b"
+    voice_llm_model: str = "qwen3:4b-instruct"
     fast_llm_model: str = "gemma3:4b"
     vision_model: str = "gemma3:4b"
     page_llm_model: str = "gemma3:4b"

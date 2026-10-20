@@ -158,6 +158,11 @@ export async function speakText(
   return response.blob();
 }
 
+export async function warmUpVoice(): Promise<void> {
+  const response = await fetch(`${BASE}/voice/warm-up`, { method: "POST" });
+  if (!response.ok) throw await toError(response);
+}
+
 export const submitFeedback = (messageId: number, value: Feedback | null) =>
   request<{ id: number; feedback: Feedback | null }>(
     `/messages/${messageId}/feedback`,
@@ -271,6 +276,7 @@ export const streamAssistant = (
   conversationId: number | null,
   handlers: StreamHandlers,
   signal?: AbortSignal,
+  voice = false,
 ) =>
   streamEvents(
     "/assistant",
@@ -278,6 +284,7 @@ export const streamAssistant = (
       question,
       conversation_id: conversationId,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      voice,
     },
     handlers,
     signal,
@@ -289,10 +296,11 @@ export const resumeAssistant = (
   approved: boolean,
   handlers: StreamHandlers,
   signal?: AbortSignal,
+  voice = false,
 ) =>
   streamEvents(
     "/assistant/resume",
-    { thread, conversation_id: conversationId, approved },
+    { thread, conversation_id: conversationId, approved, voice },
     handlers,
     signal,
   );
